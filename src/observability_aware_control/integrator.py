@@ -50,7 +50,7 @@ class Integrator:
         dynamics: typing.DynamicsFunction,
         method: Methods = Methods.RK4,
         output: Optional[typing.OutputFunction] = None,
-        dt=1.0,
+        stepsize: typing.ArrayLike = jnp.array(1),
     ):
         """Initializes the Integrator object
 
@@ -64,11 +64,17 @@ class Integrator:
         output : Optional[OutputFunction], optional
             An optional output function applied to each point in the solution of
             the ODE, by default None
+        stepsize : ArrayLike, optional
+            The integration stepsize(s). If not a single scalar, then must be a
+            array of multiple potentially non-uniform stepsizes, and just as
+            many control inputs must be passed when the invoking the integrator
 
         Raises
         ------
         NotImplementedError
-            _description_
+            `method` is not a member in the Methods enumerator
+        ValueError
+            `stepsize` is not positive
         """
 
         self._dynamics = dynamics
@@ -76,33 +82,59 @@ class Integrator:
             raise NotImplementedError(f"{method} is not a valid integration method")
         self._method = method
         self._output = output
-        self._dt = jnp.asarray(dt)
+        self._stepsize = jnp.asarray(stepsize)
+        if jnp.any(self._stepsize <= 0):
+            raise ValueError("Stepsizes must be positive")
+
+    @property
+    def stepsize(self):
+        return self._stepsize
+
+    @stepsize.setter
+    def stepsize(self, value):
+        self._stepsize = jnp.asarray(value)
 
     def __call__(self, x_op, u):
-        if self._dt.size == 1:
-            step_fcn = functools.partial(self._step, uniform_dt=self._dt)
+        """Invokes the integrator at some initial state, with a sequence of
+        control inputs
+
+        Parameters
+        ----------
+        x_op : jax.Array
+            Initial state for the integrator
+        u : jax.Array
+            A sequence (array) of control inputs
+
+        Returns
+        -------
+        Tuple[jax.Array, jax.Array]
+            A tuple of the resultant state trajectory and the values of the
+            dynamics ODE at each point
+        """
+        if self._stepsize.size == 1:
+            step_fcn = functools.partial(self._step, uniform_dt=self._stepsize)
             _, tup = jax.lax.scan(step_fcn, init=x_op, xs=(u,))
         else:
-            _, tup = jax.lax.scan(self._step, init=x_op, xs=(u, self._dt))
+            _, tup = jax.lax.scan(self._step, init=x_op, xs=(u, self._stepsize))
 
         return tup
 
     def _step(self, x_op, tup, uniform_dt=None):
         if uniform_dt is not None:
-            dt = uniform_dt
+            stepsize = uniform_dt
             (u,) = tup
         else:
-            u, dt = tup
+            u, stepsize = tup
         dx = self._dynamics(x_op, u)
         if self._method is Methods.RK4:
             k = jnp.empty((4, x_op.size))
             k = k.at[0, :].set(dx)
-            k = k.at[1, :].set(self._dynamics(x_op + dt / 2.0 * k[0, :], u))
-            k = k.at[2, :].set(self._dynamics(x_op + dt / 2.0 * k[1, :], u))
-            k = k.at[3, :].set(self._dynamics(x_op + dt * k[2, :], u))
+            k = k.at[1, :].set(self._dynamics(x_op + stepsize / 2.0 * k[0, :], u))
+            k = k.at[2, :].set(self._dynamics(x_op + stepsize / 2.0 * k[1, :], u))
+            k = k.at[3, :].set(self._dynamics(x_op + stepsize * k[2, :], u))
             increment = jnp.array([1.0, 2.0, 2.0, 1.0]) @ k / 6.0
         elif self._method == Methods.RK4:
             increment = dx
 
         y = self._output(x_op) if self._output is not None else x_op
-        return x_op + dt * increment, (y, dx)
+        return x_op + stepsize * increment, (y, dx)

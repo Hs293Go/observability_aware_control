@@ -53,19 +53,18 @@ def _():
     return x0, us
 
 
-stepsizes = jnp.arange(0, 5) * 0.02
+stepsizes = jnp.arange(1, 6) * 0.01
 
 
 @pytest.mark.parametrize("dt", stepsizes)
 def test_integration(random_data, dt):
 
-    dt = 0.01
     sym_solve_ivp = make_symbolic_integrator(dt)
-    solve_ivp = jax.jit(integrator.Integrator(bot.dynamics, dt=dt))
+    solve_ivp = jax.jit(integrator.Integrator(bot.dynamics, stepsize=dt))
     for x0, us in zip(*random_data):
 
         expected_xs = symbolic_solve_ivp(sym_solve_ivp, x0, us)
 
-        result_xs, _ = solve_ivp(x0, us)
+        result_xs, _ = solve_ivp(x0, us)  # pylint: disable=not-callable
 
         assert jnp.allclose(result_xs, expected_xs[:-1, :], rtol=1e-5)

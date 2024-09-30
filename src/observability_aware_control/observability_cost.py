@@ -53,17 +53,18 @@ class ObservabilityCost:
         self,
         dynamics: typing.DynamicsFunction,
         observation: typing.ObservationFunction,
-        observability_dt: typing.ArrayLike,
-        gramian=stlog.STLOG,
+        integrator_dt: typing.ArrayLike,
         *,
+        gramian=stlog.STLOG,
         integration_method=integrator.Methods.RK4,
         gramian_kw=None,
         gramian_metric=default_gramian_metric,
         observed_indices=(),
     ):
 
-        self._solve_ode = integrator.Integrator(dynamics, integration_method)
-        self._observability_dt = observability_dt
+        self._solve_ode = integrator.Integrator(
+            dynamics, integration_method, stepsize=integrator_dt
+        )
         self._gramian_metric = gramian_metric
         if gramian_kw is not None:
             self._stlog = gramian(dynamics, observation, **gramian_kw)
@@ -78,20 +79,47 @@ class ObservabilityCost:
             # Take everything
             self._stlog_slice = ...
 
-    def eval_gramian(self, x, u):
-        return self._stlog(x, u, self._observability_dt)[self._stlog_slice]
+    def eval_gramian(self, x, u, dt):
+        return self._stlog(x, u, dt)[self._stlog_slice]
 
     def __call__(
         self,
-        x,
+        x0,
         us,
         dt,
         return_trajectory=False,
         return_gramians=False,
-    ):
-        xs, _ = self._solve_ode(x, us, dt)
+    ) -> ObservabilityCostValue:
+        """Evaluates observability cost given an initial state and a sequence of
+        control inputs, evaluating a metric of the observability gramian at each
+        point of the resultant state trajectory and summing up the results
 
-        gramians = jax.vmap(self.eval_gramian)(xs, us)
+        Parameters
+        ----------
+        x0 : Array
+            The initial state
+        us : Array
+            A sequence (array) of control inputs
+        dt : Array
+            Observation horizon(s)
+        return_trajectory : bool, optional
+            Toggles if the predicted trajectory (shooting nodes) will be
+            returned, by default False
+        return_gramians : bool, optional
+            Toggles if all the Gramians at each point on the predicted
+            trajectory will be returned, by default False
+
+        Returns
+        -------
+        ObservabilityCostValue
+            A tuple consisting of (cost_value [, gramians [, states, inputs]]),
+            where gramians, states, and inputs may be None if return_{gramians,
+            trajectory} are not toggled on
+        """
+
+        xs, _ = self._solve_ode(x0, us)
+
+        gramians = jax.vmap(self.eval_gramian)(xs, us, dt)
 
         objective = self._gramian_metric(gramians)
 
