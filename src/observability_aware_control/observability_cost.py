@@ -30,7 +30,7 @@ import jax.numpy.linalg as jla
 from . import integrator, stlog, typing
 
 
-class ObservabilityCost(NamedTuple):
+class ObservabilityCostValue(NamedTuple):
     objective: jax.Array
     gramians: Optional[jax.Array] = None
     states: Optional[jax.Array] = None
@@ -42,7 +42,7 @@ def default_gramian_metric(gramians):
     return 1.0 / jnp.log(sigmas.min(axis=1).sum())
 
 
-class ObservabilityCostFunction:
+class ObservabilityCost:
     """Our observability cost function evaluates observability --- a metric of
     the local observability gramian, suitably approximated --- at each point
     along a model-prediction trajectory, then sums these observability metrics
@@ -59,7 +59,7 @@ class ObservabilityCostFunction:
         integration_method=integrator.Methods.RK4,
         gramian_kw=None,
         gramian_metric=default_gramian_metric,
-        observed_indices=()
+        observed_indices=(),
     ):
 
         self._solve_ode = integrator.Integrator(dynamics, integration_method)
@@ -96,12 +96,12 @@ class ObservabilityCostFunction:
         objective = self._gramian_metric(gramians)
 
         if return_trajectory:
-            return ObservabilityCost(objective, states=xs, inputs=us)
+            return ObservabilityCostValue(objective, states=xs, inputs=us)
 
         if return_gramians:
-            return ObservabilityCost(objective, gramians)
+            return ObservabilityCostValue(objective, gramians)
 
         if return_trajectory and return_gramians:
-            return ObservabilityCost(objective, gramians, xs, us)
+            return ObservabilityCostValue(objective, gramians, xs, us)
 
-        return ObservabilityCost(objective)
+        return ObservabilityCostValue(objective)

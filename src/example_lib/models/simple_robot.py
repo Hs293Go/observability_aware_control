@@ -21,7 +21,10 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
+import enum
+
 import jax.numpy as jnp
+import jax.numpy.linalg as jla
 
 from example_lib import math
 
@@ -35,6 +38,19 @@ def dynamics(x, u):
     )
 
 
-def observation(x, _, lm):
+class ObservationKind(enum.Enum):
+    POSITION = 0
+    RANGE = 1
+    BEARING = 2
+
+
+def observation(x, _, lm, kind=ObservationKind.POSITION):
     position, heading, *_ = map(jnp.squeeze, jnp.split(x, [2]))
-    return math.angle_rotate_point(heading, lm - position, True)
+    relative_position = math.angle_rotate_point(heading, lm - position, True)
+    if kind == ObservationKind.POSITION:
+        return relative_position
+    if kind == ObservationKind.RANGE:
+        return jla.norm(relative_position)
+    if kind == ObservationKind.BEARING:
+        return jnp.arctan2(relative_position[1], relative_position[0])
+    raise ValueError(f"{kind} is not a valid kind of interrobot observation")
