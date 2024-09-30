@@ -50,6 +50,24 @@ def make_symbolic_lie_derivatives(order):
     return expected_lie_derivatives
 
 
+def make_symbolic_lie_derivative_gradients(order):
+    sym = {
+        "x": cs.MX.sym("x", 3, 1),  # type: ignore
+        "u": cs.MX.sym("u", 2, 1),  # type: ignore
+        "lm": cs.MX.sym("lm", 2, 1),  # type: ignore
+    }
+
+    lfh = sym_bot.observation(sym["x"], sym["u"], sym["lm"])
+    expected_lie_derivative_gradients = []
+    for o in range(0, order + 1):
+        dlfh = cs.jacobian(lfh, sym["x"])
+        expected_lie_derivative_gradients.append(
+            cs.Function(f"lie_derivative_gradient_{o}", sym.values(), [dlfh])
+        )
+        lfh = cs.jtimes(lfh, sym["x"], sym_bot.dynamics(sym["x"], sym["u"]))
+    return expected_lie_derivative_gradients
+
+
 NUM_TRIALS = 1000
 
 
@@ -88,4 +106,28 @@ def test_lie_derivative(random_data, order):
         for x, u, lm in zip(*random_data):
             result_value = result(x, u, lm)
             expected_value = jnp.array(expected(x, u, lm)).ravel()
+            assert jnp.allclose(result_value, expected_value)
+
+
+@pytest.mark.parametrize("order", orders)
+def test_lie_derivative_gradients(random_data, order):
+    expected_lie_derivative_gradients = make_symbolic_lie_derivative_gradients(order)
+
+    result_lie_derivative_gradients = [
+        jax.jit(jax.jacobian(it))
+        for it in lie_derivative.lie_derivative(bot.observation, bot.dynamics, order)
+    ]
+
+    assert (
+        len(result_lie_derivative_gradients)
+        == len(expected_lie_derivative_gradients)
+        == order + 1
+    )
+
+    for result, expected in zip(
+        result_lie_derivative_gradients, expected_lie_derivative_gradients
+    ):
+        for x, u, lm in zip(*random_data):
+            result_value = result(x, u, lm)
+            expected_value = jnp.array(expected(x, u, lm))
             assert jnp.allclose(result_value, expected_value)

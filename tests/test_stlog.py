@@ -1,0 +1,85 @@
+import functools
+import itertools
+
+import casadi as cs
+import jax
+import jax.numpy as jnp
+import pytest
+import test_lib.models.symbolic_simple_robot as sym_bot
+from jax.scipy import special
+
+import example_lib.models.simple_robot as bot
+from observability_aware_control import stlog
+
+jax.config.update("jax_enable_x64", True)
+
+
+def make_symbolic_stlog(order, kind):
+    sym = {
+        "x": cs.MX.sym("x", 3, 1),  # type: ignore
+        "u": cs.MX.sym("u", 2, 1),  # type: ignore
+        "dt": cs.MX.sym("dt"),  # type: ignore
+        "lm": cs.MX.sym("lm", 2, 1),  # type: ignore
+    }
+
+    lfh = sym_bot.observation(sym["x"], sym["u"], sym["lm"], kind=kind)
+    lie_derivative_gradients = []
+    for _ in range(0, order + 1):
+        dlfh = cs.jacobian(lfh, sym["x"])
+        lie_derivative_gradients.append(dlfh)
+        lfh = cs.jtimes(lfh, sym["x"], sym_bot.dynamics(sym["x"], sym["u"]))
+
+    sym_stlog = sum(
+        (
+            sym["dt"] ** (i + j + 1)
+            / ((i + j + 1) * special.factorial(i) * special.factorial(j))
+        )
+        * lie_derivative_gradients[i].T
+        @ lie_derivative_gradients[j]
+        for i, j in itertools.product(range(order + 1), range(order + 1))
+    )
+    return cs.Function("sym_stlog", sym.values(), [sym_stlog])
+
+
+ORDER = 2
+NUM_TRIALS = 500
+
+
+@pytest.fixture(name="random_data")
+def _():
+    key = jax.random.PRNGKey(1000)
+    x_key, u_key, lm_key = jax.random.split(key, 3)
+    x_batch = jax.random.uniform(
+        x_key,
+        (NUM_TRIALS, 3),
+        minval=jnp.array([-1.0, -1.0, -jnp.pi]),
+        maxval=jnp.array([1.0, 1.0, jnp.pi]),
+    )
+    u_batch = jax.random.uniform(
+        u_key, (NUM_TRIALS, 2), minval=jnp.array([0, -5]), maxval=jnp.array([10, 5])
+    )
+    lm_batch = jax.random.uniform(lm_key, (NUM_TRIALS, 2))
+    return x_batch, u_batch, lm_batch
+
+
+test_params = list(
+    itertools.product(
+        jnp.arange(1, 6) * 0.1,  # step sizes
+        zip(bot.ObservationKind, sym_bot.ObservationKind),
+    )
+)
+
+
+@pytest.mark.parametrize("stepsize,kinds", test_params)
+def test_stlog(random_data, stepsize, kinds):
+    kind, sym_kind = kinds
+
+    sym_gramian = make_symbolic_stlog(ORDER, sym_kind)
+    observation_fcn = functools.partial(bot.observation, kind=kind)
+
+    gramian = jax.jit(stlog.STLOG(bot.dynamics, observation_fcn, ORDER))
+
+    for x0, us, lm in zip(*random_data):
+        result = gramian(x0, us, stepsize, lm)  # pylint: disable=not-callable
+        expected = jnp.asarray(sym_gramian(x0, us, stepsize, lm))
+        assert result == pytest.approx(expected)

@@ -64,7 +64,7 @@ class STLOG:
             each observation, by default None
         """
         self._lie_derivative_gradients = [
-            jax.jacobian(lambda *a, it_=it: jnp.atleast_1d(it_(*a)))
+            jax.jacobian(it)
             for it in lie_derivative.lie_derivative(observation, dynamics, order)
         ]
         if cov is None:
@@ -108,7 +108,7 @@ class STLOG:
             number of observations) approximated by the STLOG scheme
         """
         lie_derivative_gradients = jnp.stack(
-            [it(x, u, *args) for it in self._lie_derivative_gradients]
+            [jnp.atleast_2d(it(x, u, *args)) for it in self._lie_derivative_gradients]
         )
 
         factor = jnp.asarray(dt) ** self._k / self._den
@@ -116,8 +116,8 @@ class STLOG:
         if self._inv_cov is None:
             return jnp.sum(
                 factor[..., None, None]
-                * lie_derivative_gradients[self._a].mT
-                @ lie_derivative_gradients[self._b],
+                * lie_derivative_gradients[self._a, ...].mT
+                @ lie_derivative_gradients[self._b, ...],
                 axis=(0, 1),
             )
 
