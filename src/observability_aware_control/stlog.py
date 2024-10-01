@@ -1,5 +1,5 @@
 """
-Copyright © 2024 Hs293Go
+Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -104,7 +104,7 @@ class STLOG:
         Returns
         -------
         jax.Array
-            The Local Observation Gramian (symmetric matrix with size equal to
+            The Local Observability Gramian (symmetric matrix with size equal to
             number of observations) approximated by the STLOG scheme
         """
         lie_derivative_gradients = jnp.stack(
