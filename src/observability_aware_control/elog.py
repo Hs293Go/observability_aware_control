@@ -26,10 +26,10 @@ from typing import Any, Sequence, Union
 import jax
 import jax.numpy as jnp
 
-from . import integrator, typing
+from . import integrator, log_interface, typing
 
 
-class ELOG:
+class ELOG(log_interface.LocalObservabilityGramian):
     """Krener and IDE's Empirical Local Observability Gramian (ELOG) relies on
     numerically differentiating a path of observations. This is accomplished by
 

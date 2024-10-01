@@ -28,10 +28,10 @@ import jax.numpy as jnp
 import jax.numpy.linalg as jla
 from jax.scipy import special
 
-from . import lie_derivative, typing
+from . import lie_derivative, log_interface, typing
 
 
-class STLOG:
+class STLOG(log_interface.LocalObservabilityGramian):
     """
     Our Short Time Local Observability Gramian is a novel approximation of the
     Local Observability Gramian that represents the ability to uniquely
