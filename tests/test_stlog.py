@@ -26,14 +26,17 @@ import itertools
 import casadi as cs
 import jax
 import jax.numpy as jnp
+import jax.numpy.linalg as jla
 import pytest
 import test_lib.models.symbolic_simple_robot as sym_bot
 from jax.scipy import special
 
 import example_lib.models.simple_robot as bot
-from observability_aware_control import stlog
+from observability_aware_control import elog, stlog
 
 jax.config.update("jax_enable_x64", True)
+
+# pylint: disable=not-callable
 
 
 def make_symbolic_stlog(order, kind):
@@ -105,3 +108,32 @@ def test_stlog(random_data, stepsize, kinds):
         result = gramian(x0, us, stepsize, lm)  # pylint: disable=not-callable
         expected = jnp.asarray(sym_gramian(x0, us, stepsize, lm))
         assert result == pytest.approx(expected)
+
+
+def normclose(a, b, rtol=1e-2):
+    """Even fuzzier, linear-algebra based matrix comparison for Gramians"""
+    return jla.norm(a - b) <= jnp.maximum(jla.norm(a), jla.norm(b)) * rtol
+
+
+test_params_sve = itertools.product([0.01, 0.03, 0.05], list(bot.ObservationKind)[0:2])
+
+ELOG_STEPS = 40
+
+
+@pytest.mark.parametrize("stepsize,kind", test_params_sve)
+def test_stlog_vs_elog(random_data, stepsize, kind):
+
+    observation_fcn = functools.partial(bot.observation, kind=kind)
+
+    stlog_gramian = jax.jit(stlog.STLOG(bot.dynamics, observation_fcn, ORDER))
+    elog_gramian = jax.jit(elog.ELOG(bot.dynamics, observation_fcn))
+
+    for x0, u, lm in zip(*random_data):
+        # We need to space out the landmarks from the vehicle position as
+        # tests will fail due to weird gramian values in blatantly unobservable
+        # configurations, i.e. landmark very close to vehicle position
+        lm += jnp.array([3.0, 3.0])
+        expected = stlog_gramian(x0, u, stepsize, lm)
+        us, lms = jnp.array([u] * ELOG_STEPS), jnp.array([lm] * ELOG_STEPS)
+        result = elog_gramian(x0, us, stepsize / ELOG_STEPS, lms)
+        assert normclose(result, expected)

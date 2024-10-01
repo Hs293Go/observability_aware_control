@@ -32,15 +32,16 @@ class ObservationKind(enum.Enum):
 
 
 def observation(x, _, lm, kind=ObservationKind.POSITION):
-    sx, cx = cs.sin(x[2]), cs.cos(x[2])
+    heading = x[2]
+    sx, cx = cs.sin(heading), cs.cos(heading)
     rot = cs.vertcat(cs.horzcat(cx, sx), cs.horzcat(-sx, cx))  # type: ignore
     relative_position = rot @ (lm - x[0:2])
     if kind == ObservationKind.POSITION:
-        return relative_position
+        return cs.vertcat(relative_position, heading)
     if kind == ObservationKind.RANGE:
-        return cs.norm_2(relative_position)
+        return cs.vertcat(cs.norm_2(relative_position), heading)
     if kind == ObservationKind.BEARING:
-        return cs.atan2(relative_position[1], relative_position[0])
+        return cs.vertcat(cs.atan2(relative_position[1], relative_position[0]), heading)
     raise ValueError(f"{kind} is not a valid kind of interrobot observation")
 
 

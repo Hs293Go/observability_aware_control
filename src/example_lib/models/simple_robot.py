@@ -48,9 +48,11 @@ def observation(x, _, lm, kind=ObservationKind.POSITION):
     position, heading, *_ = map(jnp.squeeze, jnp.split(x, [2]))
     relative_position = math.angle_rotate_point(heading, lm - position, True)
     if kind == ObservationKind.POSITION:
-        return relative_position
+        return jnp.append(relative_position, heading)
     if kind == ObservationKind.RANGE:
-        return jla.norm(relative_position)
+        return jnp.array([jla.norm(relative_position), heading])
     if kind == ObservationKind.BEARING:
-        return jnp.arctan2(relative_position[1], relative_position[0])
+        return jnp.array(
+            [jnp.arctan2(relative_position[1], relative_position[0]), heading]
+        )
     raise ValueError(f"{kind} is not a valid kind of interrobot observation")
