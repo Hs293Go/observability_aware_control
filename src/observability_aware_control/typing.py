@@ -20,7 +20,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from typing import Any, Callable
+from typing import Any, Callable, Sequence, Union
 
 import jax
 from jax.typing import ArrayLike
@@ -28,3 +28,5 @@ from jax.typing import ArrayLike
 DynamicsFunction = Callable[[ArrayLike, ArrayLike], jax.Array]
 ObservationFunction = Callable[[ArrayLike, ArrayLike, Any], jax.Array]
 OutputFunction = Callable[[ArrayLike], jax.Array]
+
+IndexExpression = Union[Sequence[int], slice]

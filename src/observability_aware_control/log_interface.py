@@ -24,8 +24,9 @@ import abc
 from typing import Any
 
 from jax import Array
+from jax.typing import ArrayLike
 
-from observability_aware_control import typing
+from .typing import DynamicsFunction, ObservationFunction
 
 
 class LocalObservabilityGramian(abc.ABC):
@@ -37,35 +38,31 @@ class LocalObservabilityGramian(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __init__(
-        self, dynamics: typing.DynamicsFunction, observation: typing.ObservationFunction
-    ):
+    def __init__(self, dynamics: DynamicsFunction, observation: ObservationFunction):
         """Initializes some Local Gramian approximation evaluator
 
         Parameters
         ----------
-        dynamics : typing.DynamicsFunction
+        dynamics : DynamicsFunction
             A callable implementing the ODE for the dynamical system in the form
             f(x, u). Note no explicit time dependency is allowed
-        observation : typing.ObservationFunction
+        observation : ObservationFunction
             A callable implementing the observation/output function for the
             dynamical system in the form h(x, u, *args). Feedforward is possible
             via `u` and arbitrary user data can be passed via *args
         """
 
     @abc.abstractmethod
-    def __call__(
-        self, x: typing.ArrayLike, u: typing.ArrayLike, dt: typing.ArrayLike, *args: Any
-    ) -> Array:
+    def __call__(self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any) -> Array:
         """Evaluates the Local Gramian approximation
 
         Parameters
         ----------
-        x : typing.ArrayLike
+        x : ArrayLike
             The operating state at which the Gramian is approximated
-        u : typing.ArrayLike
+        u : ArrayLike
             Control inputs required to approximate the Gramian
-        dt : typing.ArrayLike
+        dt : ArrayLike
             Control timesteps or observation horizon (depending on approximation
             scheme definition)
         Returns

@@ -27,8 +27,9 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
+from jax.typing import ArrayLike
 
-from observability_aware_control import typing
+from .typing import DynamicsFunction, OutputFunction
 
 
 class Methods(enum.Enum):
@@ -47,10 +48,10 @@ class Integrator:
 
     def __init__(
         self,
-        dynamics: typing.DynamicsFunction,
+        dynamics: DynamicsFunction,
         method: Methods = Methods.RK4,
-        output: Optional[typing.OutputFunction] = None,
-        stepsize: typing.ArrayLike = jnp.array(1),
+        output: Optional[OutputFunction] = None,
+        stepsize: ArrayLike = jnp.array(1),
     ):
         """Initializes the Integrator object
 
@@ -91,18 +92,18 @@ class Integrator:
         return self._stepsize
 
     @stepsize.setter
-    def stepsize(self, value):
+    def stepsize(self, value: ArrayLike):
         self._stepsize = jnp.asarray(value)
 
-    def __call__(self, x_op, u):
+    def __call__(self, x_op: ArrayLike, u: ArrayLike):
         """Invokes the integrator at some initial state, with a sequence of
         control inputs
 
         Parameters
         ----------
-        x_op : jax.Array
+        x_op : ArrayLike
             Initial state for the integrator
-        u : jax.Array
+        u : ArrayLike
             A sequence (array) of control inputs
 
         Returns

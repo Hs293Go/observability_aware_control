@@ -20,13 +20,14 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from types import EllipsisType
-from typing import Any, Sequence, Union
+from typing import Any
 
 import jax
 import jax.numpy as jnp
+from jax.typing import ArrayLike
 
-from . import integrator, log_interface, typing
+from . import integrator, log_interface
+from .typing import DynamicsFunction, IndexExpression, ObservationFunction
 
 
 class ELOG(log_interface.LocalObservabilityGramian):
@@ -43,20 +44,20 @@ class ELOG(log_interface.LocalObservabilityGramian):
 
     def __init__(
         self,
-        dynamics: typing.DynamicsFunction,
-        observation: typing.ObservationFunction,
-        eps: typing.ArrayLike = 1e-3,
-        perturb_axes: Union[Sequence[int], EllipsisType] = ...,
+        dynamics: DynamicsFunction,
+        observation: ObservationFunction,
+        eps: ArrayLike = 1e-3,
+        perturb_indices: IndexExpression = (),
         method: integrator.Methods = integrator.Methods.RK4,
     ):
         """Initializes the ELOG Local Gramian approximation evaluator
 
         Parameters
         ----------
-        dynamics : typing.DynamicsFunction
+        dynamics : DynamicsFunction
             A callable implementing the ODE for the dynamical system in the form
             f(x, u). Note no explicit time dependency is allowed
-        observation : typing.ObservationFunction
+        observation : ObservationFunction
             A callable implementing the observation/output function for the
             dynamical system in the form h(x, u, *args). Feedforward is possible
             via `u` and arbitrary user data can be passed via *args
@@ -65,9 +66,9 @@ class ELOG(log_interface.LocalObservabilityGramian):
             in which case the same perturbation is applied to all components
             uniformly, or an array of perturbations matched to each state
             component to be perturbed, by default 1e-3
-        perturb_axes : Union[Sequence[int], EllipsisType], optional
+        perturb_indices : IndexExpression, optional
             An expression that indexes a subset of the system state to be
-            perturbed, by default ...
+            perturbed, by default ()
         method : integrator.Methods, optional
             A enumerator selecting the integration method for computing the
             system (and subsequently observation) trajectory, by default
@@ -76,27 +77,23 @@ class ELOG(log_interface.LocalObservabilityGramian):
         self._solve_ode = integrator.Integrator(dynamics, method)
         self._observation = jax.vmap(observation)
         self._eps = jnp.asarray(eps)
-        self._perturb_axes = perturb_axes
+        self._perturb_indices = perturb_indices
         self._method = method
 
     def __call__(
-        self,
-        x0: typing.ArrayLike,
-        u: typing.ArrayLike,
-        dt: typing.ArrayLike,
-        *args: Any
+        self, x0: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
         """Evaluates the ELOG Local Gramian approximate starting from a given
         initial condition through a trajectory of control inputs
 
         Parameters
         ----------
-        x : typing.ArrayLike
+        x : ArrayLike
             The operating state at which the Gramian is approximated
-        u : typing.ArrayLike
+        u : ArrayLike
             An array (sequence) of control inputs spanning the full trajectory
             over which observability is evaluated
-        dt : typing.ArrayLike
+        dt : ArrayLike
             An array of timesteps between application of control inputs,
             spanning the full trajectory. Can be a scalar, in which case a
             single uniform timestep is used.
@@ -121,7 +118,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
             yi_minus = self._observation(xs_minus, u, *args)
             return jnp.atleast_2d(yi_plus - yi_minus)
 
-        perturb_bases = jnp.eye(len(x0))[self._perturb_axes]
+        perturb_bases = jnp.eye(len(x0))[self._perturb_indices]
         x0_plus = x0 + self._eps * perturb_bases
         x0_minus = x0 - self._eps * perturb_bases
         y_all = jax.vmap(_perturb, out_axes=-1)(x0_plus, x0_minus) / (2.0 * self._eps)

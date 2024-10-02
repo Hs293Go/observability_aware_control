@@ -27,8 +27,10 @@ import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jla
 from jax.scipy import special
+from jax.typing import ArrayLike
 
-from . import lie_derivative, log_interface, typing
+from . import lie_derivative, log_interface
+from .typing import DynamicsFunction, ObservationFunction
 
 
 class STLOG(log_interface.LocalObservabilityGramian):
@@ -41,25 +43,25 @@ class STLOG(log_interface.LocalObservabilityGramian):
 
     def __init__(
         self,
-        dynamics: typing.DynamicsFunction,
-        observation: typing.ObservationFunction,
+        dynamics: DynamicsFunction,
+        observation: ObservationFunction,
         order: int = 1,
-        cov: Optional[typing.ArrayLike] = None,
+        cov: Optional[ArrayLike] = None,
     ):
         """Initializes the STLOG Local Gramian approximation evaluator
 
         Parameters
         ----------
-        dynamics : typing.DynamicsFunction
+        dynamics : DynamicsFunction
             A callable implementing the ODE for the dynamical system in the form
             f(x, u). Note no explicit time dependency is allowed
-        observation : typing.ObservationFunction
+        observation : ObservationFunction
             A callable implementing the observation/output function for the
             dynamical system in the form h(x, u, *args). Feedforward is possible
             via `u` and arbitrary user data can be passed via *args
         order : int, optional
             The order of approximation, by default 1
-        cov : Optional[typing.ArrayLike], optional
+        cov : Optional[ArrayLike], optional
             Observation covariance matrix encoding noise/uncertainty affecting
             each observation, by default None
         """
@@ -85,18 +87,18 @@ class STLOG(log_interface.LocalObservabilityGramian):
         return self._order
 
     def __call__(
-        self, x: typing.ArrayLike, u: typing.ArrayLike, dt: typing.ArrayLike, *args: Any
+        self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
         """Evaluates the STLOG Local Gramian approximation at a given state and
         control input
 
         Parameters
         ----------
-        x : typing.ArrayLike
+        x : ArrayLike
             The operating state at which the Gramian is approximated
-        u : typing.ArrayLike
+        u : ArrayLike
             The control input at which the Gramian is approximated
-        dt : typing.ArrayLike
+        dt : ArrayLike
             The observation horizon
         *args : Any
             Arbitrary user data passed to the observation function
