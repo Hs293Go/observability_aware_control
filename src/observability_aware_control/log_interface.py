@@ -71,3 +71,6 @@ class LocalObservabilityGramian(abc.ABC):
             The approximated Local Observability Gramian (symmetric matrix with
             size equal to number of observations)
         """
+
+
+LocalObservabilityGramianType = type[LocalObservabilityGramian]

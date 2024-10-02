@@ -21,23 +21,28 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
-from typing import NamedTuple, Optional
+from typing import Any, Callable, Mapping, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jla
+from jax.typing import ArrayLike
 
-from . import integrator, stlog, typing
+from . import integrator, log_interface, stlog
+from .typing import DynamicsFunction, IndexExpression, ObservationFunction
 
 
 class ObservabilityCostValue(NamedTuple):
     objective: jax.Array
-    gramians: Optional[jax.Array] = None
-    states: Optional[jax.Array] = None
-    inputs: Optional[jax.Array] = None
+    gramians: Optional[ArrayLike] = None
+    states: Optional[ArrayLike] = None
+    inputs: Optional[ArrayLike] = None
 
 
-def default_gramian_metric(gramians):
+GramianMetric = Callable[[ArrayLike], jax.Array]
+
+
+def default_gramian_metric(gramians: ArrayLike):
     sigmas = jla.svd(gramians, compute_uv=False, hermitian=True)
     return 1.0 / jnp.log(sigmas.min(axis=1).sum())
 
@@ -51,16 +56,46 @@ class ObservabilityCost:
 
     def __init__(
         self,
-        dynamics: typing.DynamicsFunction,
-        observation: typing.ObservationFunction,
-        integrator_dt: typing.ArrayLike,
+        dynamics: DynamicsFunction,
+        observation: ObservationFunction,
+        integrator_dt: ArrayLike,
         *,
-        gramian=stlog.STLOG,
-        integration_method=integrator.Methods.RK4,
-        gramian_kw=None,
-        gramian_metric=default_gramian_metric,
-        observed_indices=(),
+        gramian: log_interface.LocalObservabilityGramianType = stlog.STLOG,
+        integration_method: integrator.Methods = integrator.Methods.RK4,
+        gramian_kw: Optional[Mapping] = None,
+        gramian_metric: GramianMetric = default_gramian_metric,
+        observed_indices: IndexExpression = (),
     ):
+        """Initializes the observability cost function object
+
+        Parameters
+        ----------
+        dynamics : typing.DynamicsFunction
+            A callable implementing the ODE for the dynamical system in the form
+            f(x, u). Note no explicit time dependency is allowed
+        observation : typing.ObservationFunction
+            A callable implementing the observation/output function for the
+            dynamical system in the form h(x, u, *args). Feedforward is possible
+            via `u` and arbitrary user data can be passed via *args
+        integrator_dt : ArrayLike
+            Stepsize for integrating the system dynamics during model prediction
+        gramian : log_interface.LocalObservabilityGramianType, optional
+            The type of a Local Observability Gramian evaluator satisfying the
+            LocalObservabilityGramian interface, by default stlog.STLOG
+        integration_method : integrator.Methods, optional
+            A enumerator selecting the integration method for computing the
+            system (and subsequently observation) trajectory, by default
+            integrator.Methods.RK4
+        gramian_kw : Optional[Mapping], optional
+            A mapping of keywords to be passed into the initializer of the Local
+            Observability Gramian, by default None
+        gramian_metric : GramianMetric, optional
+            A function that acts as a metric on Gramian metrics, by default
+            default_gramian_metric
+        observed_indices : typing.IndexExpression, optional
+            An expression that indexes a subset of the system state whose
+            observability is evaluated, by default ()
+        """
 
         self._solve_ode = integrator.Integrator(
             dynamics, integration_method, stepsize=integrator_dt
@@ -72,23 +107,51 @@ class ObservabilityCost:
             self._stlog = gramian(dynamics, observation)
 
         if observed_indices:
+            ix = (
+                jnp.r_[observed_indices]
+                if isinstance(observed_indices, slice)
+                else jnp.asarray(observed_indices)
+            )
             # Create slice that would extract rows and columns indexed by
             # 'observed_indices'
-            self._stlog_slice = jnp.ix_(observed_indices, observed_indices)
+            self._stlog_slice = jnp.ix_(ix, ix)
         else:
             # Take everything
             self._stlog_slice = ...
 
-    def eval_gramian(self, x, u, dt):
-        return self._stlog(x, u, dt)[self._stlog_slice]
+    def eval_gramian(
+        self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
+    ) -> jax.Array:
+        """Invokes the underlying STLOG approximator, subject to the slicing
+        scheme specified by 'observed_indices' in the initializer
+
+        Parameters
+        ----------
+        x : ArrayLike
+            The operating state at which the Gramian is approximated
+        u : ArrayLike
+            The control input at which the Gramian is approximated
+        dt : ArrayLike
+            The observation horizon
+        *args : Any
+            Arbitrary user data passed to the observation function
+
+        Returns
+        -------
+        jax.Array
+            The Local Observability Gramian approximated by the current scheme
+            and sliced appropriately
+        """
+        return self._stlog(x, u, dt, *args)[self._stlog_slice]
 
     def __call__(
         self,
-        x0,
-        us,
-        dt,
-        return_trajectory=False,
-        return_gramians=False,
+        x0: ArrayLike,
+        us: ArrayLike,
+        dt: ArrayLike,
+        gramian_args: Any = (),
+        return_trajectory: bool = False,
+        return_gramians: bool = False,
     ) -> ObservabilityCostValue:
         """Evaluates observability cost given an initial state and a sequence of
         control inputs, evaluating a metric of the observability gramian at each
@@ -96,12 +159,17 @@ class ObservabilityCost:
 
         Parameters
         ----------
-        x0 : Array
+        x0 : ArrayLike
             The initial state
-        us : Array
-            A sequence (array) of control inputs
-        dt : Array
-            Observation horizon(s)
+        us : ArrayLike
+            A sequence (array) of control inputs. The length of this sequence
+            determines the number of prediction steps to be taken
+        dt : ArrayLike
+            Observation horizon(s). If this is a scalar, then the same
+            observation horizon will be used at every prediction step
+        gramian_args : Any, optional
+            Any additional arguments to be passed to the Gramian approximator
+            (the underlying observation function), by default ()
         return_trajectory : bool, optional
             Toggles if the predicted trajectory (shooting nodes) will be
             returned, by default False
@@ -119,7 +187,15 @@ class ObservabilityCost:
 
         xs, _ = self._solve_ode(x0, us)
 
-        gramians = jax.vmap(self.eval_gramian)(xs, us, dt)
+        dt = jnp.asarray(dt)
+
+        if dt.size == 1:
+            in_axes = (0,) * 2 + (None,) + (0,) * len(gramian_args)
+        else:
+            in_axes = 0
+        gramians = jax.vmap(self.eval_gramian, in_axes=in_axes)(
+            xs, us, dt, *gramian_args
+        )
 
         objective = self._gramian_metric(gramians)
 
