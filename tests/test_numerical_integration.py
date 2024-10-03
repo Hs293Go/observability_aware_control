@@ -89,4 +89,4 @@ def test_integration(random_data, dt):
 
         result_xs, _ = solve_ivp(x0, us)  # pylint: disable=not-callable
 
-        assert result_xs == pytest.approx(expected_xs[:-1, :], rel=8e-5)
+        assert result_xs == pytest.approx(expected_xs[1:, :], rel=8e-5)
