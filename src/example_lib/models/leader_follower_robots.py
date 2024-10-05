@@ -49,7 +49,7 @@ def observation(x, u, kind=ObservationKind.RANGE):
     x = jnp.reshape(x, (-1, NUM_STATES))
     u = jnp.reshape(u, (-1, NUM_INPUTS))
     leader_pos = x[0, 0:2]
-    hdg = x[:, 3]
+    hdg = x[:, 2]
 
     relative_positions = leader_pos - x[1:, 0:2]
 

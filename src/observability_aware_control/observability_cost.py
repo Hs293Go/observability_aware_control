@@ -42,9 +42,12 @@ class ObservabilityCostValue(NamedTuple):
 GramianMetric = Callable[[ArrayLike], jax.Array]
 
 
-def default_gramian_metric(gramians: ArrayLike):
-    sigmas = jla.svd(gramians, compute_uv=False, hermitian=True)
-    return 1.0 / jnp.log(sigmas.min(axis=1).sum())
+def default_gramian_metric(gramians: ArrayLike, log_scale: bool = True):
+    sigmas = jla.norm(gramians, axis=(1, 2), ord=-2)
+
+    if log_scale:
+        return 1.0 / jnp.log(sigmas.sum())
+    return -sigmas.sum()
 
 
 class ObservabilityCost:
