@@ -188,17 +188,13 @@ class ObservabilityCost:
             trajectory} are not toggled on
         """
 
+        us = jnp.asarray(us)
         xs, _ = self._solve_ode(x0, us)
 
         dt = jnp.asarray(dt)
 
-        if dt.size == 1:
-            in_axes = (0,) * 2 + (None,) + (0,) * len(gramian_args)
-        else:
-            in_axes = 0
-        gramians = jax.vmap(self.eval_gramian, in_axes=in_axes)(
-            xs, us, dt, *gramian_args
-        )
+        dt = jnp.broadcast_to(dt, us.shape[0])
+        gramians = jax.vmap(self.eval_gramian)(xs, us, dt, *gramian_args)
 
         objective = self._gramian_metric(gramians)
 

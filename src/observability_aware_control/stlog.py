@@ -46,7 +46,7 @@ class STLOG(log_interface.LocalObservabilityGramian):
         dynamics: DynamicsFunction,
         observation: ObservationFunction,
         order: int = 1,
-        cov: Optional[ArrayLike] = None,
+        var: Optional[ArrayLike] = None,
     ):
         """Initializes the STLOG Local Gramian approximation evaluator
 
@@ -61,18 +61,18 @@ class STLOG(log_interface.LocalObservabilityGramian):
             via `u` and arbitrary user data can be passed via *args
         order : int, optional
             The order of approximation, by default 1
-        cov : Optional[ArrayLike], optional
-            Observation covariance matrix encoding noise/uncertainty affecting
-            each observation, by default None
+        var : Optional[ArrayLike], optional
+            Observation variance encoding noise/uncertainty affecting each
+            observation, by default None
         """
         self._lie_derivative_gradients = [
             jax.jacobian(it)
             for it in lie_derivative.lie_derivative(observation, dynamics, order)
         ]
-        if cov is None:
+        if var is None:
             self._inv_cov = None
         else:
-            self._inv_cov = jnp.asarray(jla.inv(cov)[jnp.newaxis, jnp.newaxis])
+            self._inv_cov = jnp.asarray(jnp.diag(1.0 / var)[jnp.newaxis, jnp.newaxis])
 
         self._order = order
 
