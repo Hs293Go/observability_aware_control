@@ -1,4 +1,28 @@
-from typing import Any, Dict, Optional
+"""
+Copyright © 2024 H S Helson Go and Ching Lok Chong
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
+import functools as fn
+import inspect
+from typing import Any, Dict, Optional, Tuple
 
 import equinox as eqx
 import jax
@@ -9,6 +33,7 @@ from scipy import optimize
 from observability_aware_control import utils
 
 from . import observability_cost, utils
+from .typing import ConstraintFunction, IndexExpression
 
 
 def _recombine_input(u, u_const, id_mut, id_const):
@@ -17,16 +42,45 @@ def _recombine_input(u, u_const, id_mut, id_const):
 
 
 class ObservabilityAwareController:
+    """This controller solves our Observability-Aware control problem, computing
+    a sequence of control inputs that minimize the sum of the minimum singular
+    value of the Local Observability Gramian at each point along a predicted
+    trajectory
+    """
+
     def __init__(
         self,
         cost: observability_cost.ObservabilityCost,
-        lb: ArrayLike = jnp.inf,
-        ub: ArrayLike = -jnp.inf,
+        lb: ArrayLike = -jnp.inf,
+        ub: ArrayLike = jnp.inf,
         method: Optional[utils.optim_utils.Method] = None,
         optim_options: Optional[Dict[str, Any]] = None,
-        constraint=None,
-        constraint_bounds=None,
+        constraint: Optional[ConstraintFunction] = None,
+        constraint_bounds: Tuple[ArrayLike, ArrayLike] = (-jnp.inf, 0.0),
     ):
+        """Initializes the Observability Aware Controller
+
+        Parameters
+        ----------
+        cost : observability_cost.ObservabilityCost
+            An already-initialized ObservabilityCost object
+        lb : ArrayLike, optional
+            Control input lower bounds. Can be a 1D array which is uniform
+            bounds over all predictive timesteps, or a matrix containing bounds
+            stacked over first axis, by default -jnp.inf
+        ub : ArrayLike, optional
+            Control input lower bounds. Can be a 1D array which is uniform
+            bounds over all predictive timesteps, or a matrix containing bounds
+            stacked over first axis, by default jnp.inf
+        method : Optional[utils.optim_utils.Method], optional
+            Algorithm to be used by scipy.optimize.minimize, by default None
+        optim_options : Optional[Dict[str, Any]], optional
+            Options to be passed to scipy.optimize.minimize, by default None
+        constraint : Optional[ConstraintFunction], optional
+            Nonlinear constraint function, by default None
+        constraint_bounds : Tuple[ArrayLike, ArrayLike], optional
+            Bounds for nonlinear constraints, by default (-jnp.inf, 0.0)
+        """
 
         self._cost = cost
 
@@ -44,7 +98,9 @@ class ObservabilityAwareController:
 
         if constraint is not None and constraint_bounds is not None:
             self._constraint = constraint
-            self._constraint_lb, self._constraint_ub = constraint_bounds
+            self._constraint_lb, self._constraint_ub = jnp.broadcast_arrays(
+                *map(jnp.asarray, constraint_bounds)
+            )
             self._constraint_jacobian = jax.jacobian(
                 lambda us, x, *a, **kw: constraint(x, us, *a, **kw)
             )
@@ -66,7 +122,11 @@ class ObservabilityAwareController:
         ), "This problem is not configured to have constraints"
 
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
-        return self._constraint(x, u, cost=self._cost)
+
+        # If the constraint model requires the cost model, then pass it in
+        if "cost" in inspect.signature(self._constraint).parameters:
+            return self._constraint(x, u, cost=self._cost)
+        return self._constraint(x, u)
 
     @eqx.filter_jit
     def constraint_jacobian(
@@ -79,33 +139,63 @@ class ObservabilityAwareController:
         jac = self._constraint_jacobian(u, x, cost=self._cost)
         return jac[..., minimized_indices].reshape(jac.shape[0], -1)
 
-    def minimize(self, x0, u0, t, minimized_indices=()) -> optimize.OptimizeResult:
+    def minimize(
+        self,
+        x0: ArrayLike,
+        u0: ArrayLike,
+        t: ArrayLike,
+        minimized_indices: IndexExpression = (),
+    ) -> optimize.OptimizeResult:
+        """Solves the Observability-Aware Control Problem
+
+        Parameters
+        ----------
+        x0 : ArrayLike
+            Initial state for model prediction
+        u0 : ArrayLike
+            Initial guess of the control inputs for model prediction
+        t : ArrayLike
+            The observation horizon
+        minimized_indices : IndexExpression, optional
+            An expression that indexes the components in the control input to be
+            minimized, by default ()
+
+        Returns
+        -------
+        optimize.OptimizeResult
+            The result of invoking scipy.optimize.minimize
+        """
+        u0 = jnp.asarray(u0)
         num_steps, num_inputs = u0.shape
         if not minimized_indices:
-            minimized_indices = jnp.arange(num_inputs)
+            minimized_idx = jnp.arange(num_inputs)
+            constant_idx = ()
         else:
-            minimized_indices = jnp.asarray(minimized_indices)
+            minimized_idx = jnp.asarray(minimized_indices)
+            constant_idx = jnp.setdiff1d(jnp.arange(num_inputs), minimized_idx)
 
-        constant_indices = jnp.setdiff1d(jnp.arange(u0.shape[1]), minimized_indices)
-
-        self._lb, self._ub, u0 = jnp.broadcast_arrays(self._lb, self._ub, u0)
+        *bounds, u0 = jnp.broadcast_arrays(self._lb, self._ub, u0)
         # Broadcast bounds over all time windows, takes mutable components, then flatten
-        self._problem.bounds = zip(
-            *(it[..., minimized_indices].ravel() for it in (self._lb, self._ub))
-        )  # type: ignore
+        self._problem.bounds = optimize.Bounds(
+            *(it[..., minimized_indices].ravel() for it in bounds)  # type: ignore
+        )
 
-        u_const = u0[..., constant_indices]
-        self._problem.x0 = u0[..., minimized_indices].ravel()
-        args = (u_const, x0, t, minimized_indices, constant_indices)
+        u_const = u0[..., constant_idx]
+        self._problem.x0 = u0[..., minimized_idx].ravel()
+        args = (u_const, x0, t, minimized_idx, constant_idx)
         self._problem.args = args
 
         if self._constraint is not None:
-            lb = jnp.broadcast_to(self._constraint_lb, num_steps)
-            ub = jnp.broadcast_to(self._constraint_ub, num_steps)
+            if self._constraint_lb.ndim <= 1:
+                self._constraint_lb = jnp.atleast_1d(self._constraint_lb)
+
+                bcast = fn.partial(
+                    jnp.broadcast_to, shape=(num_steps, len(self._constraint_lb))
+                )
+                lb, ub = map(bcast, (self._constraint_lb, self._constraint_ub))
             self._problem.constraints = optimize.NonlinearConstraint(
                 lambda u: self.constraint(u, *args),
-                lb=lb,
-                ub=ub,
+                *map(jnp.ravel, (lb, ub)),
                 jac=lambda u: self.constraint_jacobian(u, *args),  # type: ignore
             )
 
@@ -115,8 +205,6 @@ class ObservabilityAwareController:
         prob_dict = vars(self._problem)
         soln = optimize.minimize(**prob_dict)
 
-        soln["x"] = _recombine_input(
-            soln.x, u_const, minimized_indices, constant_indices
-        )
+        soln["x"] = _recombine_input(soln.x, u_const, minimized_idx, constant_idx)
         soln["fun_hist"] = rec.fun
         return soln

@@ -30,3 +30,4 @@ ObservationFunction = Callable[[ArrayLike, ArrayLike, Any], jax.Array]
 OutputFunction = Callable[[ArrayLike], jax.Array]
 
 IndexExpression = Union[Sequence[int], slice]
+ConstraintFunction = Callable
