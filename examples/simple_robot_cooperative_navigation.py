@@ -75,8 +75,6 @@ def main():
         ),
     )
 
-    anim = utils.anim_utils.Animated2DTrajectory(n_robots)
-
     x[0, :] = np.concatenate(cfg["session"]["initial_positions"])
     u[0, :] = u_refs_full[0, :]
 
@@ -98,6 +96,10 @@ def main():
     )
 
     try:
+        fig, ax = plt.subplots()
+        anim = utils.animation.AnimatedRobotTrajectory(
+            fig, ax, animation_kws={"interval": 50, "save_count": 100}
+        )
         with plt.ion():
             for i in tqdm.trange(1, sim_steps):
                 u_refs = np.array([u[i - 1, :]] * window)
@@ -130,17 +132,16 @@ def main():
                     f" {(fun - fun_hist[0]):4g}\nOptimality:"
                     f" {optimality:.4}\nviolation: {constr_violation:.4}"
                 )
-                plt_data = np.reshape(x[0:i, :], (i, n_robots, 3))
+                plt_x, plt_y, *_ = np.dsplit(
+                    np.moveaxis(np.reshape(x[0:i, :], (i, -1, 3))[..., 0:2], 1, 0), 2
+                )
 
-                anim.t = time[0:i]
-                for idx in range(n_robots):
-                    anim.x[idx] = plt_data[:, idx, 0]
-                    anim.y[idx] = plt_data[:, idx, 1]
+                anim.set_data(plt_x, plt_y)
 
                 plt.pause(1e-3)
             success = True
     finally:  # Save the data at all costs
-        anim.anim.save(cfg["session"].get("video_name", "optimization.mp4"))
+        anim.anime.save(cfg["session"].get("video_name", "optimization.mp4"))
         soln_stats = {k: np.asarray(v) for k, v in soln_stats.items()}
         save_name = str(cfg["session"].get("save_name", "optimization_results.npz"))
         if not success:

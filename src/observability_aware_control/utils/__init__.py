@@ -1,2 +1,2 @@
-from . import anim_utils, optim_utils
+from . import animation, optim_utils
 from .utils import *
