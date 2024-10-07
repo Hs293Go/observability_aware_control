@@ -119,6 +119,9 @@ class ObservabilityCost:
             # Take everything
             self._stlog_slice = ...
 
+    def eval_integrator(self, x0, us):
+        return self._solve_ode(x0, us)
+
     def eval_gramian(
         self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
