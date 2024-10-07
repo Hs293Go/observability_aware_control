@@ -16,7 +16,7 @@ dt = 0.2
 [opc]
 window_size = 5
 observed_components = []
-max_inter_vehicle_distance = 4
+max_inter_vehicle_distance = 6
 min_inter_vehicle_distance = 0.2
 
 [optim]
