@@ -21,6 +21,8 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
+import enum
+
 import jax.numpy as jnp
 
 from example_lib import math
@@ -28,19 +30,24 @@ from example_lib import math
 NUM_STATES = 10
 
 
-def dynamics(x, u, input_kind):
+class InputKind(enum.Enum):
+    THRUST = 0
+    ACCELERATION = 1
+
+
+def dynamics(x, u, input_kind=InputKind.THRUST):
     _, q, v = jnp.split(x, [3, 7])
 
-    if input_kind == "thrust":
-        f = jnp.array([0.0, 0.0, u[0]])
-        w = jnp.array([u[1], u[2], u[3], 0.0]) / 2.0
-    elif input_kind == "acceleration":
-        f = u[0:3]
-        w = jnp.array([u[3], u[4], u[5], 0.0]) / 2.0
+    if input_kind == InputKind.THRUST:
+        thrust, body_rate = jnp.split(u, [1])
+        accel = jnp.array([0.0, 0.0, thrust.squeeze()])
+    elif input_kind == InputKind.ACCELERATION:
+        accel, body_rate = jnp.split(u, [3])
+    w = jnp.append(body_rate / 2.0, 0.0)
     g = jnp.array([0.0, 0.0, -9.81])
 
     dx = jnp.empty(NUM_STATES)
     dx = dx.at[0:3].set(v)
     dx = dx.at[3:7].set(math.quaternion_product(q, w))
-    dx = dx.at[7:10].set(math.quaternion_rotate_point(q, f) + g)
+    dx = dx.at[7:10].set(math.quaternion_rotate_point(q, accel) + g)
     return dx
