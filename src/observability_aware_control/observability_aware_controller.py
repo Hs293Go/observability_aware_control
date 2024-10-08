@@ -177,7 +177,7 @@ class ObservabilityAwareController:
         *bounds, u0 = jnp.broadcast_arrays(self._lb, self._ub, u0)
         # Broadcast bounds over all time windows, takes mutable components, then flatten
         self._problem.bounds = optimize.Bounds(
-            *(it[..., minimized_indices].ravel() for it in bounds)  # type: ignore
+            *(it[..., minimized_idx].ravel() for it in bounds)  # type: ignore
         )
 
         u_const = u0[..., constant_idx]
