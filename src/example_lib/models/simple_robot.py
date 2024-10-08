@@ -23,12 +23,16 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import enum
 
+import equinox as eqx
+import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jla
 
 from example_lib import math
 
 
+@jax.custom_jvp
+@jax.jit
 def dynamics(x, u):
     heading = x[2]
     velocity, angular_velocity = map(jnp.squeeze, jnp.split(u, [1]))
@@ -36,6 +40,29 @@ def dynamics(x, u):
         math.angle_rotate_point(heading, jnp.array([velocity, 0.0])),
         angular_velocity,
     )
+
+
+@dynamics.defjvp
+@jax.jit
+def dynamics_jvp(primals, tangents):
+    x, u = primals
+    dx, du = tangents
+
+    velocity, yaw_rate = u
+    heading = x[2]
+
+    sx, cx = jnp.sin(heading), jnp.cos(heading)
+
+    fval = jnp.array([cx * velocity, sx * velocity, yaw_rate])
+    jvp_val = jnp.array(
+        [
+            -sx * velocity * dx[2] + cx * du[0],
+            cx * velocity * dx[2] + sx * du[0],
+            du[1],
+        ]
+    )
+
+    return fval, jvp_val
 
 
 class ObservationKind(enum.Enum):
