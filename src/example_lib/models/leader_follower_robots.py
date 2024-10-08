@@ -67,12 +67,7 @@ def observation(x, u, kind=ObservationKind.RANGE):
 def interrobot_distance(x0, us, cost):
     xs, _ = cost.eval_integrator(x0, us)
 
-    @jax.vmap
-    def compute_position_diff(x_):
-        x_ = jnp.reshape(x_, (-1, NUM_STATES))
-        leader_pos = jnp.atleast_2d(x_[0, 0:2])
-        follower_pos = x_[1:, 0:2]
-        return (follower_pos - leader_pos).ravel()
-
-    res = jnp.linalg.norm(compute_position_diff(xs), axis=1)
-    return res
+    xs = jnp.reshape(xs, (len(xs), -1, NUM_STATES))
+    leader_pos = xs[:, [0], 0:2]
+    follower_pos = xs[:, 1:, 0:2]
+    return jnp.linalg.norm(follower_pos - leader_pos, axis=2).ravel()
