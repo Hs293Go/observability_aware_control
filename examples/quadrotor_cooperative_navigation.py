@@ -91,10 +91,10 @@ def main():
         ub=u_ub,
         method=cfg["optim"]["method"],
         optim_options=cfg["optim"]["options"],
-        constraint=mdl.interrobot_distance,
+        constraint=mdl.interrobot_distance_squared,
         constraint_bounds=(
-            cfg["opc"]["min_inter_vehicle_distance"],
-            cfg["opc"]["max_inter_vehicle_distance"],
+            cfg["opc"]["min_inter_vehicle_distance"] ** 2,
+            cfg["opc"]["max_inter_vehicle_distance"] ** 2,
         ),
     )
 

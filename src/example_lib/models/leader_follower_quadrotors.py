@@ -66,11 +66,11 @@ def observation(x, u, kind=ObservationKind.RANGE):
     return jnp.concatenate([pos_ref, att, h_bearings, vel])
 
 
-def interrobot_distance(x0, us, cost):
+def interrobot_distance_squared(x0, us, cost):
     xs, _ = cost.eval_integrator(x0, us)
 
     xs = jnp.reshape(xs, (len(xs), -1, NUM_STATES))
     leader_pos = xs[:, [0], 0:3]
     follower_pos = xs[:, 1:, 0:3]
 
-    return jnp.linalg.norm(follower_pos - leader_pos, axis=2).ravel()
+    return jnp.sum((follower_pos - leader_pos) ** 2, axis=2).ravel()
