@@ -135,5 +135,5 @@ def test_stlog_vs_elog(random_data, stepsize, kind):
         lm += jnp.array([3.0, 3.0])
         expected = stlog_gramian(x0, u, stepsize, lm)
         us, lms = jnp.array([u] * ELOG_STEPS), jnp.array([lm] * ELOG_STEPS)
-        result = elog_gramian(x0, us, stepsize / ELOG_STEPS, lms)
+        result = elog_gramian(x0, us, stepsize, lms)
         assert normclose(result, expected)

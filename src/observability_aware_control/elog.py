@@ -109,6 +109,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
 
         x0 = jnp.asarray(x0)
         u = jnp.asarray(u)
+        dt /= len(u)
         self._solve_ode.stepsize = dt
 
         def _perturb(x0_plus, x0_minus):
