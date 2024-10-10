@@ -133,10 +133,11 @@ class Integrator:
             u, stepsize = tup
         dx = self._dynamics(x_op, u)
         if self._method is Methods.RK4:
+            half_stepsize = stepsize / 2
             k = jnp.empty((4, x_op.size))
             k = k.at[0, :].set(dx)
-            k = k.at[1, :].set(self._dynamics(x_op + stepsize / 2.0 * k[0, :], u))
-            k = k.at[2, :].set(self._dynamics(x_op + stepsize / 2.0 * k[1, :], u))
+            k = k.at[1, :].set(self._dynamics(x_op + half_stepsize * k[0, :], u))
+            k = k.at[2, :].set(self._dynamics(x_op + half_stepsize * k[1, :], u))
             k = k.at[3, :].set(self._dynamics(x_op + stepsize * k[2, :], u))
             increment = jnp.array([1.0, 2.0, 2.0, 1.0]) @ k / 6.0
         elif self._method == Methods.EULER:
