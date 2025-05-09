@@ -7,8 +7,8 @@ video_name = "/home/hs293go/Dropbox/datasets/straight_optimization_results.mp4"
 
 [leader.trajectory]
 waypoints = [
-    [0.0, 0.0, 10.0],  #
-    [10.0, 0.0, 10.0],
+  [0.0, 0.0, 10.0],  #
+  [10.0, 0.0, 10.0],
 
 ]
 timestamps = [0, 120]
@@ -25,7 +25,7 @@ dt = 0.2
 
 [opc]
 window_size = 15
-observed_components = [10, 11, 12]
+observed_components = [0, 1, 2, 7, 8, 9]
 max_inter_vehicle_distance = 3.5
 min_inter_vehicle_distance = 1.0
 

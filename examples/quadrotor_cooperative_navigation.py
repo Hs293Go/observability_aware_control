@@ -21,17 +21,17 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import sys
-import tomllib
 import warnings
 
 import jax
 import jax.experimental.compilation_cache.compilation_cache as cc
 import matplotlib.pyplot as plt
 import numpy as np
+import tomllib
 import tqdm
 from generate_quadrotor_trajectory import generate_trajectory
 
-import example_lib.models.leader_follower_quadrotors as mdl
+import example_lib.models.inter_quadrotor_pose as mdl
 from observability_aware_control import (
     integrator,
     observability_aware_controller,
@@ -65,14 +65,15 @@ def main():
 
     sim_steps = min(cfg["sim"]["steps"], len(t_refs))
     time = t_refs[0 : sim_steps + 1]
-    x = np.zeros((sim_steps, N_ROBOTS * mdl.NUM_STATES))
-    u = np.zeros((sim_steps, N_ROBOTS * mdl.NUM_INPUTS))
+    x = np.zeros((sim_steps, mdl.NUM_STATES))
+    u = np.zeros((sim_steps, mdl.NUM_INPUTS))
 
-    pos_var = np.full(3, 1e-2)
-    att_var = np.full(4 * n_robots, 1e-2)
-    range_var = np.full((n_robots - 1), 1e-2)
-    vel_var = np.full(3 * n_robots, 1e-2)
-    var = np.concatenate([pos_var, att_var, range_var, vel_var])
+    # pos_var = np.full(3, 1e-2)
+    range_var = 1e-2
+    att_var = np.full(4, 1e-2)
+    # vel_var = np.full(3 * n_robots, 1e-2)
+    # var = np.concatenate([pos_var, att_var, range_var, vel_var])
+    var = np.concatenate([np.array([range_var]), att_var])
     cost = observability_cost.ObservabilityCost(
         mdl.dynamics,
         mdl.observation,
@@ -101,13 +102,16 @@ def main():
     # -----------------Setup initial conditions and data saving-----------------
 
     x[0, :] = np.concatenate(
-        [x_leader[0, :], np.asarray(cfg["followers"]["init_state"]).ravel()]
+        [np.array([0.0, -2.0, 3.0]), np.array([0.0, 0.0, 0.0, 1.0]), np.zeros(3)]
     )
+    # np.concatenate(
+    # [x_leader[0, :], np.asarray(cfg["followers"]["init_state"]).ravel()]
+    # )
 
     input_steps = u_leader.shape[0]
     if sim_steps + window > input_steps:
         u_leader_tmp = np.array(u_leader)
-        u_leader = np.zeros((sim_steps + window, mdl.NUM_INPUTS))
+        u_leader = np.zeros((sim_steps + window, u_leader.shape[1]))
         u_leader[:input_steps, :] = u_leader_tmp
         u_leader[input_steps:, :] = u_leader[-1, :]
 
@@ -144,7 +148,7 @@ def main():
                 soln = min_problem.minimize(
                     x[i - 1, :], u0, cfg["stlog"]["dt"], (4, 5, 6, 7)
                 )
-                soln_u = np.concatenate([u_leader[i, :], soln.x[0, mdl.NUM_INPUTS :]])
+                soln_u = np.concatenate([u_leader[i, :], soln.x[0, 4:]])
                 u[i, :] = soln_u
                 x[i, :], dx[i, :] = sim(x[i - 1, :], soln_u)
 
