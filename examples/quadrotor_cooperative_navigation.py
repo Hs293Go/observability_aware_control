@@ -21,17 +21,18 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import sys
-import tomllib
 import warnings
 
 import jax
 import jax.experimental.compilation_cache.compilation_cache as cc
 import matplotlib.pyplot as plt
 import numpy as np
+import tomllib
 import tqdm
 from generate_quadrotor_trajectory import generate_trajectory
 
-import example_lib.models.leader_follower_quadrotors as mdl
+import example_lib.models.inter_quadrotor_pose as mdl
+from example_lib import math
 from observability_aware_control import (
     integrator,
     observability_aware_controller,
@@ -65,14 +66,21 @@ def main():
 
     sim_steps = min(cfg["sim"]["steps"], len(t_refs))
     time = t_refs[0 : sim_steps + 1]
-    x = np.zeros((sim_steps, N_ROBOTS * mdl.NUM_STATES))
-    u = np.zeros((sim_steps, N_ROBOTS * mdl.NUM_INPUTS))
+    x = np.zeros((sim_steps, mdl.NUM_STATES))
+    u = np.zeros((sim_steps, mdl.NUM_INPUTS))
 
-    pos_var = np.full(3, 1e-2)
-    att_var = np.full(4 * n_robots, 1e-2)
-    range_var = np.full((n_robots - 1), 1e-2)
-    vel_var = np.full(3 * n_robots, 1e-2)
-    var = np.concatenate([pos_var, att_var, range_var, vel_var])
+    # pos_var = np.full(3, 1e-2)
+    range_var = 1e-2
+    att_var = np.full(4, 1e-2)
+    vel_var = np.full(3, 1e-2)
+    # var = np.concatenate([pos_var, att_var, range_var, vel_var])
+    var = np.concatenate(
+        [
+            np.array([range_var]),
+            att_var,
+            # vel_var,
+        ]
+    )
     cost = observability_cost.ObservabilityCost(
         mdl.dynamics,
         mdl.observation,
@@ -101,13 +109,20 @@ def main():
     # -----------------Setup initial conditions and data saving-----------------
 
     x[0, :] = np.concatenate(
-        [x_leader[0, :], np.asarray(cfg["followers"]["init_state"]).ravel()]
+        [
+            np.array([0.0, -1.0, 1.0]),
+            np.array([0.0, 0.0, 0.0, 1.0]),
+            np.zeros(3),
+        ]
     )
+    # np.concatenate(
+    # [x_leader[0, :], np.asarray(cfg["followers"]["init_state"]).ravel()]
+    # )
 
     input_steps = u_leader.shape[0]
     if sim_steps + window > input_steps:
         u_leader_tmp = np.array(u_leader)
-        u_leader = np.zeros((sim_steps + window, mdl.NUM_INPUTS))
+        u_leader = np.zeros((sim_steps + window, u_leader.shape[1]))
         u_leader[:input_steps, :] = u_leader_tmp
         u_leader[input_steps:, :] = u_leader[-1, :]
 
@@ -136,6 +151,9 @@ def main():
         )
 
         fig.show()
+        p_l = x_leader[:, 0:3]
+        q_l = x_leader[:, 3:7]
+        p_f = []
         with plt.ion():
             for i in tqdm.trange(1, sim_steps):
                 u_leader_0 = u_leader[i : i + window, :]
@@ -144,10 +162,10 @@ def main():
                 soln = min_problem.minimize(
                     x[i - 1, :], u0, cfg["stlog"]["dt"], (4, 5, 6, 7)
                 )
-                soln_u = np.concatenate([u_leader[i, :], soln.x[0, mdl.NUM_INPUTS :]])
+                soln_u = np.concatenate([u_leader[i, :], soln.x[0, 4:]])
                 u[i, :] = soln_u
                 x[i, :], dx[i, :] = sim(x[i - 1, :], soln_u)
-
+                x[i, 3:7] /= np.linalg.norm(x[i, 3:7])
                 fun = soln.fun
                 status = soln.get("status", -1)
                 nit = soln.get("nit", np.nan)
@@ -165,18 +183,15 @@ def main():
                 fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
                 soln_stats["fun_hist"].append(fun_hist)
 
-                # anim.annotation = (
-                #     f"nit: {nit} f(x): {fun:.4}\n $\\Delta$ f(x):"
-                #     f" {(fun - fun_hist[0]):4g}\nOptimality:"
-                #     f" {optimality:.4}\nviolation: {constr_violation:.4}"
+                p_lf = x[i, 0:3]
+                q_fl = x[i, 3:7]
+                # print(
+                #     f"p_l: {p_l[i, :]} ||p_lf||: {np.linalg.norm(p_lf)} ||q_lf||: {np.linalg.norm(q_fl)}"
                 # )
-                plt_x, plt_y, plt_z, *_ = np.dsplit(
-                    np.moveaxis(
-                        np.reshape(x[:i, :], (i, -1, mdl.NUM_STATES))[..., 0:3], 1, 0
-                    ),
-                    3,
-                )
-                anim.set_data(plt_x, plt_y, plt_z)
+                q_f = math.quaternion_product(q_l[i, :], math.quaternion_inverse(q_fl))
+                p_f.append(p_l[i, :] - math.quaternion_rotate_point(q_f, p_lf))
+                plt_p = np.stack([p_l[:i, 0:3], np.array(p_f)])
+                anim.set_data(plt_p[..., 0], plt_p[..., 1], plt_p[..., 2])
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events()
             success = True

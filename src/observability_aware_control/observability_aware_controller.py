@@ -104,6 +104,8 @@ class ObservabilityAwareController:
             self._constraint_jacobian = jax.jacobian(
                 lambda us, x, *a, **kw: constraint(x, us, *a, **kw)
             )
+        else:
+            self._constraint = None
 
     @eqx.filter_jit
     def objective(self, u, u_const, x, dt, minimized_indices, constant_indices):
@@ -117,9 +119,9 @@ class ObservabilityAwareController:
 
     @eqx.filter_jit
     def constraint(self, u, u_const, x, _, minimized_indices, constant_indices):
-        assert (
-            self._constraint is not None
-        ), "This problem is not configured to have constraints"
+        assert self._constraint is not None, (
+            "This problem is not configured to have constraints"
+        )
 
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
 
@@ -132,9 +134,9 @@ class ObservabilityAwareController:
     def constraint_jacobian(
         self, u, u_const, x, _, minimized_indices, constant_indices
     ):
-        assert (
-            self._constraint is not None
-        ), "This problem is not configured to have constraints"
+        assert self._constraint is not None, (
+            "This problem is not configured to have constraints"
+        )
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
         jac = self._constraint_jacobian(u, x, cost=self._cost)
         return jac[..., minimized_indices].reshape(jac.shape[0], -1)

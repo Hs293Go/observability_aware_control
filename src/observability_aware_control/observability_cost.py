@@ -200,14 +200,13 @@ class ObservabilityCost:
         gramians = jax.vmap(self.eval_gramian)(xs, us, dt, *gramian_args)
 
         objective = self._gramian_metric(gramians)
+        if return_trajectory and return_gramians:
+            return ObservabilityCostValue(objective, gramians, xs, us)
 
         if return_trajectory:
             return ObservabilityCostValue(objective, states=xs, inputs=us)
 
         if return_gramians:
             return ObservabilityCostValue(objective, gramians)
-
-        if return_trajectory and return_gramians:
-            return ObservabilityCostValue(objective, gramians, xs, us)
 
         return ObservabilityCostValue(objective)

@@ -20,9 +20,11 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import jax
 import jax.numpy as jnp
 
 
+@jax.jit
 def angle_rotate_point(angle, point, invert_rotation=False):
     if invert_rotation:
         angle = -angle
@@ -37,6 +39,7 @@ def angle_rotate_point(angle, point, invert_rotation=False):
     )
 
 
+@jax.jit
 def quaternion_product(lhs, rhs):
     return jnp.array(
         [
@@ -48,8 +51,14 @@ def quaternion_product(lhs, rhs):
     )
 
 
+@jax.jit
 def quaternion_rotate_point(quaternion, point, invert_rotation=False):
     vec = -quaternion[0:3] if invert_rotation else quaternion[0:3]
     uv = jnp.cross(vec, point)
     uv += uv
     return point + quaternion[3] * uv + jnp.cross(vec, uv)
+
+
+@jax.jit
+def quaternion_inverse(quaternion):
+    return jnp.array([-quaternion[0], -quaternion[1], -quaternion[2], quaternion[3]])
