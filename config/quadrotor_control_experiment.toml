@@ -20,13 +20,13 @@ init_state = [[0.0, 2.0, 7.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
 
 
 [stlog]
-order = 1
+order = 5
 dt = 0.2
 
 [opc]
-window_size = 15
+window_size = 20
 observed_components = [0, 1, 2, 7, 8, 9]
-max_inter_vehicle_distance = 3.5
+max_inter_vehicle_distance = 3.0
 min_inter_vehicle_distance = 1.0
 
 [optim]

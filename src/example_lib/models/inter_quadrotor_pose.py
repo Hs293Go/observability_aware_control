@@ -38,7 +38,7 @@ def dynamics(x, u):
     return jnp.concatenate(
         [
             jnp.cross(omega_f, r_lf) + v_lf,
-            -math.quaternion_product(jnp.append(0.5 * omega_f, 0.0), q_fl)
+            math.quaternion_product(jnp.append(0.5 * omega_f, 0.0), q_fl)
             + math.quaternion_product(q_fl, jnp.append(0.5 * omega_l, 0.0)),
             jnp.cross(omega_f, v_lf)
             + math.quaternion_rotate_point(q_fl, jnp.array([0.0, 0.0, f_l[0]]))
@@ -47,13 +47,13 @@ def dynamics(x, u):
     )
 
 
-def observation(x, _, use_half_sqnorm=False):
+def observation(x, _, use_sqnorm=True):
     r_lf = x[0:3]
     q_fl = x[3:7]
 
     r_lf_sqnorm = jnp.dot(r_lf, r_lf)
-    if use_half_sqnorm:
-        range_meas = r_lf_sqnorm / 2.0
+    if use_sqnorm:
+        range_meas = r_lf_sqnorm
     else:
         range_meas = jnp.sqrt(r_lf_sqnorm)
     return jnp.concatenate([jnp.array([range_meas]), q_fl])
