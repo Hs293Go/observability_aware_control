@@ -47,7 +47,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
         dynamics: DynamicsFunction,
         observation: ObservationFunction,
         eps: ArrayLike = 1e-3,
-        perturb_indices: IndexExpression = (),
+        perturb_indices: IndexExpression = ...,
         method: integrator.Methods = integrator.Methods.RK4,
     ):
         """Initializes the ELOG Local Gramian approximation evaluator
@@ -119,7 +119,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
             yi_minus = self._observation(xs_minus, u, *args)
             return jnp.atleast_2d(yi_plus - yi_minus)
 
-        perturb_bases = jnp.eye(len(x0))[self._perturb_indices, ...]
+        perturb_bases = jnp.eye(len(x0))[self._perturb_indices, :]
         x0_plus = x0 + self._eps * perturb_bases
         x0_minus = x0 - self._eps * perturb_bases
         y_all = jax.vmap(_perturb, out_axes=-1)(x0_plus, x0_minus) / (2.0 * self._eps)

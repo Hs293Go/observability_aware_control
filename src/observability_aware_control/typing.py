@@ -20,6 +20,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+from types import EllipsisType
 from typing import Any, Callable, Sequence, Union
 
 import jax
@@ -29,5 +30,5 @@ DynamicsFunction = Callable[[ArrayLike, ArrayLike], jax.Array]
 ObservationFunction = Callable[[ArrayLike, ArrayLike, Any], jax.Array]
 OutputFunction = Callable[[ArrayLike], jax.Array]
 
-IndexExpression = Union[Sequence[int], slice]
+IndexExpression = Union[Sequence[int], slice, EllipsisType]
 ConstraintFunction = Callable

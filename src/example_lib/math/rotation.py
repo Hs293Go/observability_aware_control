@@ -20,11 +20,12 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 
 
-@jax.jit
+@eqx.filter_jit
 def angle_rotate_point(angle, point, invert_rotation=False):
     if invert_rotation:
         angle = -angle
@@ -51,7 +52,7 @@ def quaternion_product(lhs, rhs):
     )
 
 
-@jax.jit
+@eqx.filter_jit
 def quaternion_rotate_point(quaternion, point, invert_rotation=False):
     vec = -quaternion[0:3] if invert_rotation else quaternion[0:3]
     uv = jnp.cross(vec, point)

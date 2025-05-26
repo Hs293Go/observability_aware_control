@@ -122,7 +122,6 @@ ELOG_STEPS = 40
 
 @pytest.mark.parametrize("stepsize,kind", test_params_sve)
 def test_stlog_vs_elog(random_data, stepsize, kind):
-
     observation_fcn = functools.partial(bot.observation, kind=kind)
 
     stlog_gramian = jax.jit(stlog.STLOG(bot.dynamics, observation_fcn, ORDER))

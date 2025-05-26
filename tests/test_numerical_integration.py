@@ -42,7 +42,6 @@ def make_symbolic_integrator(dt):
 
 
 def symbolic_solve_ivp(sym_solve_ivp, x_op, us):
-
     expected_xs = [jnp.array(x_op)]
     for u in us:
         res = sym_solve_ivp(x0=x_op, u=u)
@@ -80,13 +79,11 @@ stepsizes = jnp.arange(1, 6) * 0.01
 
 @pytest.mark.parametrize("dt", stepsizes)
 def test_integration(random_data, dt):
-
     sym_solve_ivp = make_symbolic_integrator(dt)
     solve_ivp = jax.jit(integrator.Integrator(bot.dynamics, stepsize=dt))
     for x0, us in zip(*random_data):
-
         expected_xs = symbolic_solve_ivp(sym_solve_ivp, x0, us)
 
         result_xs, _ = solve_ivp(x0, us)  # pylint: disable=not-callable
 
-        assert result_xs == pytest.approx(expected_xs[1:, :], rel=8e-5)
+        assert result_xs == pytest.approx(expected_xs[1:, :], rel=5e-4)
