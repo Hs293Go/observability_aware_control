@@ -20,6 +20,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+from typing import Optional
+
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 
@@ -30,7 +33,7 @@ NUM_INPUTS = 8
 
 
 @jax.jit
-def dynamics(x, u):
+def dynamics(x: jax.Array, u: jax.Array):
     r_lf, q_fl, v_lf = x[:3], x[3:7], x[7:10]
 
     f_l, omega_l, f_f, omega_f = u[0], u[1:4], u[4], u[5:8]
@@ -48,7 +51,8 @@ def dynamics(x, u):
     )
 
 
-def observation(x, _=None, *, use_sqnorm=True):
+@eqx.filter_jit
+def observation(x: jax.Array, _: Optional[jax.Array] = None, *, use_sqnorm=True):
     r_lf = x[0:3]
     q_fl = x[3:7]
 
@@ -63,3 +67,44 @@ def observation(x, _=None, *, use_sqnorm=True):
 def interrobot_distance_squared(x0, us, cost):
     xs, _ = cost.eval_integrator(x0, us)
     return jnp.sum(xs[:, 0:3] ** 2, axis=1)
+
+
+@jax.jit
+def to_absolute_state(x_l, x_lf):
+    """
+    Convert relative state to absolute state.
+    """
+
+    p_l = x_l[:3]
+    q_l = x_l[3:7]
+    v_l = x_l[7:10]
+
+    p_lf = x_lf[:3]
+    q_fl = x_lf[3:7]
+    v_lf = x_lf[7:10]
+
+    q_f = math.quaternion_product(q_l, math.quaternion_inverse(q_fl))
+    p_f = p_l - math.quaternion_rotate_point(q_f, p_lf)
+    v_f = v_l - math.quaternion_rotate_point(q_f, v_lf)
+    return jnp.concatenate([p_l, q_l, v_l, p_f, q_f, v_f])
+
+
+@jax.jit
+def from_absolute_state(x_l, x_f):
+    """
+    Convert absolute state to relative state.
+    """
+
+    p_l = x_l[:3]
+    q_l = x_l[3:7]
+    v_l = x_l[7:10]
+
+    p_f = x_f[:3]
+    q_f = x_f[3:7]
+    v_f = x_f[7:10]
+
+    q_fi = math.quaternion_inverse(q_f)
+    q_fl = math.quaternion_product(q_fi, q_l)
+    p_lf = math.quaternion_rotate_point(q_fi, p_l - p_f)
+    v_lf = math.quaternion_rotate_point(q_fi, v_l - v_f)
+    return jnp.concatenate([p_lf, q_fl, v_lf])

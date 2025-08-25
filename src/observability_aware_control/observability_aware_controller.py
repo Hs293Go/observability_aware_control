@@ -32,7 +32,7 @@ from scipy import optimize
 
 from observability_aware_control import utils
 
-from . import observability_cost, utils
+from . import observability_cost
 from .typing import ConstraintFunction, IndexExpression
 
 
@@ -195,6 +195,8 @@ class ObservabilityAwareController:
                     jnp.broadcast_to, shape=(num_steps, len(self._constraint_lb))
                 )
                 lb, ub = map(bcast, (self._constraint_lb, self._constraint_ub))
+            else:
+                lb, ub = self._constraint_lb, self._constraint_ub
             self._problem.constraints = optimize.NonlinearConstraint(
                 lambda u: self.constraint(u, *args),
                 *map(jnp.ravel, (lb, ub)),

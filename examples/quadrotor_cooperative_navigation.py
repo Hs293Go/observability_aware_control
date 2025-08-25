@@ -91,8 +91,12 @@ def main():
     )
 
     window = cfg["opc"]["window_size"]
-    u_lb = np.tile(np.array(cfg["optim"]["lb"]), (window, N_ROBOTS))
-    u_ub = np.tile(np.array(cfg["optim"]["ub"]), (window, N_ROBOTS))
+    try:
+        u_lb = np.tile(np.array(cfg["optim"]["lb"]), (window, N_ROBOTS))
+        u_ub = np.tile(np.array(cfg["optim"]["ub"]), (window, N_ROBOTS))
+    except KeyError:
+        u_lb = -np.inf
+        u_ub = np.inf
     min_problem = observability_aware_controller.ObservabilityAwareController(
         cost,
         lb=u_lb,
@@ -144,6 +148,8 @@ def main():
     sim = jax.jit(
         integrator.Integrator(mdl.dynamics, integrator.Methods.EULER, stepsize=dt)
     )
+
+    inputs_all = []
     try:
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
         anim = utils.animation.AnimatedRobotTrajectory(
@@ -151,8 +157,6 @@ def main():
         )
 
         fig.show()
-        p_l = x_leader[:, 0:3]
-        q_l = x_leader[:, 3:7]
         p_f = []
         with plt.ion():
             for i in tqdm.trange(1, sim_steps):
@@ -163,6 +167,7 @@ def main():
                     x[i - 1, :], u0, cfg["stlog"]["dt"], (4, 5, 6, 7)
                 )
                 soln_u = np.concatenate([u_leader[i, :], soln.x[0, 4:]])
+                inputs_all.append(soln.x)
                 u[i, :] = soln_u
                 x[i, :], dx[i, :] = sim(x[i - 1, :], soln_u)
                 x[i, 3:7] /= np.linalg.norm(x[i, 3:7])
@@ -183,24 +188,30 @@ def main():
                 fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
                 soln_stats["fun_hist"].append(fun_hist)
 
-                p_lf = x[i, 0:3]
-                q_fl = x[i, 3:7]
-                # print(
-                #     f"p_l: {p_l[i, :]} ||p_lf||: {np.linalg.norm(p_lf)} ||q_lf||: {np.linalg.norm(q_fl)}"
-                # )
-                q_f = math.quaternion_product(q_l[i, :], math.quaternion_inverse(q_fl))
-                p_f.append(p_l[i, :] - math.quaternion_rotate_point(q_f, p_lf))
-                plt_p = np.stack([p_l[:i, 0:3], np.array(p_f)])
+                x_abs = mdl.to_absolute_state(x_leader[i, :], x[i, :])
+
+                p_f.append(x_abs[10:13])
+                plt_p = np.stack([x_leader[:i, 0:3], np.array(p_f)])
                 anim.set_data(plt_p[..., 0], plt_p[..., 1], plt_p[..., 2])
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events()
             success = True
     finally:  # Save the data at all costs
         soln_stats = {k: np.asarray(v) for k, v in soln_stats.items()}
-        save_name = str(cfg["session"].get("save_name", "optimization_results.npz"))
+        save_name = str(
+            cfg["session"].get("save_name", "optimization_results_extra_large.npz")
+        )
         if not success:
             save_name = save_name.replace(".npz", ".failed.npz")
-        np.savez(save_name, states=x, inputs=u, derivatives=dx, time=time, **soln_stats)
+        np.savez(
+            save_name,
+            states=x,
+            inputs=u,
+            inputs_all=np.array(inputs_all),
+            derivatives=dx,
+            time=time,
+            **soln_stats,
+        )
     plt.show()
 
 

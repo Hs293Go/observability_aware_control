@@ -2,8 +2,8 @@ n_robots = 2
 
 [session]
 
-save_name = "/home/hs293go/Dropbox/datasets/test_trajectory_v0.npz"
-video_name = "/home/hs293go/Dropbox/datasets/straight_optimization_results.mp4"
+save_name = "~/.cache/observability_aware_control/data/optimization_results_stlog.npz"
+video_name = "~/.cache/observability_aware_control/data/straight_optimization_results.mp4"
 
 [leader.trajectory]
 waypoints = [
@@ -31,17 +31,14 @@ min_inter_vehicle_distance = 1.0
 
 [optim]
 method = "trust-constr"
-ub = [12.0, 1.0, 1.0, 2.0]
-lb = [0.0, -1.0, -1.0, -2.0]
+ub = [30.0, 4.0, 4.0, 6.0]
+lb = [0.0, -4.0, -4.0, -6.0]
 
 
 [optim.options]
-xtol = 1e-3
-gtol = 1e-4
 disp = false
 verbose = 0
-maxiter = 100
-
+maxiter = 40
 
 [sim]
 steps = 4000

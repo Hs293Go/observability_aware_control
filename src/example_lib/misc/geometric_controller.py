@@ -173,14 +173,78 @@ class TrackingController(AcclerationSetpointShaping):
         feedback = (
             self.params.k_pos * position_error + self.params.k_vel * velocity_error
         )
+
         # Reference acceleration
-        accel_sp = self.reshape_acceleration_setpoint(
-            -feedback + self.GRAVITY + refs.acceleration
-        )
+        accel_sp = -feedback + self.GRAVITY + refs.acceleration
         attitude_sp = acceleration_vector_to_rotation(accel_sp, refs.yaw)
         thrust_sp = accel_sp @ attitude_sp @ jnp.array([0.0, 0.0, 1.0])
 
         return (
+            TrackingControllerOutput(
+                thrust_sp, Rotation.from_matrix(attitude_sp).as_quat()
+            ),
+            TrackingControllerError(position_error, velocity_error),
+        )
+
+
+class TrackingControllerWithI:
+    GRAVITY = jnp.array([0.0, 0.0, 9.81])
+
+    State = TrackingControllerState
+    Reference = TrackingControllerReference
+    Params = TrackingControllerParams
+
+    def __init__(self, params, ki) -> None:
+        self._params = params if params is not None else self.Params()
+        self._ki = ki
+
+    @property
+    def params(self):
+        return self._params
+
+    @property
+    def drag_d(self):
+        return self.params.drag_d
+
+    @property
+    def min_z_accel(self) -> float:
+        return self.params.min_z_accel
+
+    @property
+    def max_z_accel(self) -> float:
+        return self.params.max_z_accel
+
+    @property
+    @abc.abstractmethod
+    def max_tilt_ratio(self) -> float:
+        return self.params.max_tilt_ratio
+
+    def run(
+        self,
+        cumul_error,
+        state: TrackingControllerState,
+        refs: TrackingControllerReference,
+    ):
+        # Position Controller
+
+        position_error = state.position - refs.position
+        velocity_error = state.velocity - refs.velocity
+
+        cumul_error = cumul_error + position_error
+
+        feedback = (
+            self.params.k_pos * position_error
+            + self.params.k_vel * velocity_error
+            + self._ki * cumul_error
+        )
+
+        # Reference acceleration
+        accel_sp = -feedback + self.GRAVITY + refs.acceleration
+        attitude_sp = acceleration_vector_to_rotation(accel_sp, refs.yaw)
+        thrust_sp = accel_sp @ attitude_sp @ jnp.array([0.0, 0.0, 1.0])
+
+        return (
+            cumul_error,
             TrackingControllerOutput(
                 thrust_sp, Rotation.from_matrix(attitude_sp).as_quat()
             ),

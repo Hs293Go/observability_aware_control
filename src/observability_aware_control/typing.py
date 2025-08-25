@@ -21,14 +21,14 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 from types import EllipsisType
-from typing import Any, Callable, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import jax
 from jax.typing import ArrayLike
 
-DynamicsFunction = Callable[[ArrayLike, ArrayLike], jax.Array]
-ObservationFunction = Callable[[ArrayLike, ArrayLike, Any], jax.Array]
+DynamicsFunction = Callable[[jax.Array, jax.Array], jax.Array]
+ObservationFunction = Callable[[jax.Array, jax.Array], jax.Array]
 OutputFunction = Callable[[ArrayLike], jax.Array]
 
-IndexExpression = Union[Sequence[int], slice, EllipsisType]
-ConstraintFunction = Callable
+type IndexExpression = Union[Sequence[int], slice, EllipsisType]
+type ConstraintFunction = Callable
