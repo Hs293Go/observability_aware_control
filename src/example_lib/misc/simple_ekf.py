@@ -2,7 +2,6 @@ import functools
 import operator
 
 import jax
-import jax.numpy as jnp
 import jax.numpy.linalg as jla
 
 
@@ -36,9 +35,11 @@ class SimpleEKF:
     @functools.partial(jax.jit, static_argnums=[0], donate_argnums=[1, 2])
     def predict(self, x_op, kf_cov, u, dt):
         fjac, gjac = self._fjac(x_op, u, dt)
-        kf_cov = jla.multi_dot((fjac, kf_cov, fjac.T)) + jla.multi_dot(
-            (gjac, self.in_cov, gjac.T)
-        )
+        kf_cov = jla.multi_dot((fjac, kf_cov, fjac.T)) + jla.multi_dot((
+            gjac,
+            self.in_cov,
+            gjac.T,
+        ))
         x_op = self.fcn(x_op, u, dt)
         return x_op, kf_cov
 
@@ -47,19 +48,11 @@ class SimpleEKF:
         if y.size == 0:
             return x_op, kf_cov
 
-        x_wa = jnp.atleast_2d(x_op)
-        y = jnp.atleast_2d(y)
-        n_meas = y.shape[0]
-        shape = (n_meas, x_wa.shape[1])
-        x_wa = jnp.broadcast_to(x_wa, shape)
+        hjac = self._hjac(x_op, *args)
 
-        hjac = jax.vmap(self._hjac)(x_wa, *args)
-        hjac = hjac.reshape(-1, hjac.shape[-1])
+        hx = self.hfcn(x_op, *args)
 
-        hx = jax.vmap(self.hfcn)(x_wa, *args)
-        obs_cov = jnp.kron(jnp.eye(n_meas), self.obs_cov)
-
-        resid_cov = hjac @ kf_cov @ hjac.T + obs_cov
+        resid_cov = hjac @ kf_cov @ hjac.T + self.obs_cov
         kf_gain = jla.solve(resid_cov.T, hjac @ kf_cov).T
         kf_cov -= (
             kf_gain @ hjac @ kf_cov

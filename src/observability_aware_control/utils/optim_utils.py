@@ -1,63 +1,58 @@
+from collections.abc import Callable
 import dataclasses
 import pathlib
 import time
-from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy import optimize
 
-Method = Union[
-    Literal["Nelder-Mead"],
-    Literal["Powell"],
-    Literal["CG"],
-    Literal["BFGS"],
-    Literal["Newton-CG"],
-    Literal["L-BFGS-B"],
-    Literal["TNC"],
-    Literal["COBYLA"],
-    Literal["SLSQP"],
-    Literal["trust-constr"],
-    Literal["dogleg"],
-    Literal["trust-ncg"],
-    Literal["trust-exact"],
-    Literal["trust-krylov"],
-]
+Method = (
+    Literal["Nelder-Mead"]
+    | Literal["Powell"]
+    | Literal["CG"]
+    | Literal["BFGS"]
+    | Literal["Newton-CG"]
+    | Literal["L-BFGS-B"]
+    | Literal["TNC"]
+    | Literal["COBYLA"]
+    | Literal["SLSQP"]
+    | Literal["trust-constr"]
+    | Literal["dogleg"]
+    | Literal["trust-ncg"]
+    | Literal["trust-exact"]
+    | Literal["trust-krylov"]
+)
 
-FiniteDifferenceMethods = Union[
-    Literal["2-point"],
-    Literal["3-point"],
-    Literal["cs"],
-]
+FiniteDifferenceMethods = Literal["2-point"] | Literal["3-point"] | Literal["cs"]
 
 
 @dataclasses.dataclass
 class MinimizeProblem:
-    """Dataclass container for parameters to scipy.optimize.minimize"""
+    """Dataclass container for parameters to scipy.optimize.minimize."""
 
     fun: Callable
 
     x0: ArrayLike = ()
 
-    args: Tuple[Any, ...] = dataclasses.field(default=())
-    bounds: Optional[optimize.Bounds] = dataclasses.field(default=None)
+    args: tuple[Any, ...] = dataclasses.field(default=())
+    bounds: optimize.Bounds | None = dataclasses.field(default=None)
 
-    jac: Union[Callable, FiniteDifferenceMethods, bool, None] = dataclasses.field(
+    jac: Callable | FiniteDifferenceMethods | bool | None = dataclasses.field(
         default=None
     )
-    hess: Union[
-        Callable, FiniteDifferenceMethods, optimize.HessianUpdateStrategy, None
-    ] = dataclasses.field(default=None)
-
-    hessp: Optional[Callable] = dataclasses.field(default=None)
-    callback: Optional[Callable] = dataclasses.field(default=None)
-    constraints: Optional[optimize.NonlinearConstraint] = dataclasses.field(
-        default=None
+    hess: Callable | FiniteDifferenceMethods | optimize.HessianUpdateStrategy | None = (
+        dataclasses.field(default=None)
     )
-    method: Optional[Method] = dataclasses.field(default=None)
-    tol: Optional[float] = dataclasses.field(default=None)
-    options: Optional[Dict[str, Any]] = dataclasses.field(default=None)
+
+    hessp: Callable | None = dataclasses.field(default=None)
+    callback: Callable | None = dataclasses.field(default=None)
+    constraints: optimize.NonlinearConstraint | None = dataclasses.field(default=None)
+    method: Method | None = dataclasses.field(default=None)
+    tol: float | None = dataclasses.field(default=None)
+    options: dict[str, Any] | None = dataclasses.field(default=None)
 
 
 class OptimizationRecorder:
@@ -85,7 +80,7 @@ class OptimPlotter:
     def __init__(self, keys, profile_plot=False, specs=None):
         if specs is not None:
             self._specs = specs
-            spec_keys = {it for it in specs.keys()}
+            spec_keys = set(specs.keys())
             if spec_keys.difference(keys):
                 raise ValueError("")
         else:
@@ -111,7 +106,7 @@ class OptimPlotter:
             iter(self._ax)
         except TypeError:
             self._ax = [self._ax]
-        for ax, k in zip(self._ax, self._keys):
+        for ax, k in zip(self._ax, self._keys, strict=False):
             try:
                 ax.set_ylabel(self._specs[k]["ylabel"])
             except KeyError:
@@ -137,7 +132,7 @@ class OptimPlotter:
             self._p_ax.autoscale_view(True, True)
             self._p_fig.canvas.draw_idle()
 
-        for ax, k in zip(self._ax, self._keys):
+        for ax, k in zip(self._ax, self._keys, strict=False):
             self.set_data(k, info["nit"], info[k])
             ax.relim()
             ax.autoscale_view(True, True)

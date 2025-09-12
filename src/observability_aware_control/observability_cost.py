@@ -21,7 +21,8 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
-from typing import Any, Callable, Mapping, NamedTuple, Optional
+from collections.abc import Callable, Mapping
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp

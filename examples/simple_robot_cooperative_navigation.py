@@ -1,13 +1,17 @@
 import functools
+import logging
+import pathlib
 import tomllib
 
 import jax
 import jax.experimental.compilation_cache.compilation_cache as cc
 import matplotlib.pyplot as plt
 import numpy as np
+import rerun as rr
 import tqdm
 
 from example_lib.models import leader_follower_robots
+import example_lib.visualization.visualization as viz
 from observability_aware_control import (
     integrator,
     observability_aware_controller,
@@ -22,9 +26,14 @@ jax.config.update("jax_enable_x64", True)
 
 u_eqm = np.zeros(2)
 
+SCRIPT_PATH = pathlib.Path(__file__)
+CONFIG_DIR = SCRIPT_PATH.parent.parent / "config"
+
+PureYaw = functools.partial(rr.RotationAxisAngle, axis=[0, 0, 1])
+
 
 def main():
-    with open("./config/planar_robot_control_experiment.toml", "rb") as fp:
+    with (CONFIG_DIR / "planar_robot_control_experiment.toml").open("rb") as fp:
         cfg = tomllib.load(fp)
 
     n_robots = cfg["model"]["n_robots"]
@@ -57,9 +66,6 @@ def main():
         dt,
         gramian_kw={"order": cfg["stlog"]["order"], "var": var},
         observed_indices=cfg["opc"].get("observed_components", ()),
-        gramian_metric=functools.partial(
-            observability_cost.default_gramian_metric, log_scale=False
-        ),
     )
 
     min_problem = observability_aware_controller.ObservabilityAwareController(
@@ -68,11 +74,6 @@ def main():
         ub=u_ub,
         method=cfg["optim"]["method"],
         optim_options=cfg["optim"]["options"],
-        constraint=leader_follower_robots.interrobot_distance,
-        constraint_bounds=(
-            cfg["opc"]["min_inter_vehicle_distance"],
-            cfg["opc"]["max_inter_vehicle_distance"],
-        ),
     )
 
     x[0, :] = np.concatenate(cfg["session"]["initial_positions"])
@@ -86,6 +87,17 @@ def main():
         "constr_violation": [],
         "optimality": [],
     }
+    rr.init("quadrotor_control_experiment", spawn=True)
+    logging.getLogger().addHandler(rr.LoggingHandler("logs/handler"))
+    logging.getLogger().setLevel(logging.INFO)
+    rr.set_time("/time", duration=0.0)
+
+    leader_trace = viz.PositionTrace("/leader")
+    leader = viz.PoseReferenceFrame("/leader")
+    follower_trace = viz.PositionTrace("/follower")
+    follower = viz.PoseReferenceFrame("/follower")
+    leader.set_pose(np.append(x[0, 0:2], 0.0), PureYaw(angle=x[0, 2]))
+    follower.set_pose(np.append(x[0, 3:5], 0.0), PureYaw(angle=x[0, 5]))
 
     # ----------------------------Run the Simulation----------------------------
     success = False
@@ -96,68 +108,59 @@ def main():
     )
 
     try:
-        fig, ax = plt.subplots()
-        anim = utils.animation.AnimatedRobotTrajectory(
-            fig, ax, animation_kws={"interval": 50, "save_count": 100}
-        )
-        with plt.ion():
-            for i in tqdm.trange(1, sim_steps):
-                u_refs = np.array([u[i - 1, :]] * window)
-                soln = min_problem.minimize(
-                    x[i - 1, :], u_refs, cfg["stlog"]["dt"], minimized_indices=(2, 3)
-                )
-                soln_u = soln.x[0, :]
-                u[i, :] = soln_u
-                x[i, :], _ = sim(x[i - 1, :], soln_u)
+        for i in tqdm.trange(1, sim_steps):
+            u_refs = np.array([u[i - 1, :]] * window)
+            soln = min_problem.minimize(
+                x[i - 1, :], u_refs, cfg["stlog"]["dt"], minimized_indices=(2, 3)
+            )
+            soln_u = soln.x[0, :]
+            u[i, :] = soln_u
+            x[i, :], _ = sim(x[i - 1, :], soln_u)
 
-                fun = soln.fun
-                status = soln.get("status", -1)
-                nit = soln.get("nit", np.nan)
-                execution_time = soln.get("execution_time", np.nan)
-                constr_violation = float(soln.get("constr_violation", np.nan))
-                optimality = soln.get("optimality", np.nan)
+            fun = soln.fun
+            status = soln.get("status", -1)
+            nit = soln.get("nit", np.nan)
+            execution_time = soln.get("execution_time", np.nan)
+            constr_violation = float(soln.get("constr_violation", np.nan))
+            optimality = soln.get("optimality", np.nan)
 
-                soln_stats["status"].append(status)
-                soln_stats["nit"].append(nit)
-                soln_stats["execution_time"].append(execution_time)
-                soln_stats["constr_violation"].append(constr_violation)
-                soln_stats["optimality"].append(optimality)
+            soln_stats["status"].append(status)
+            soln_stats["nit"].append(nit)
+            soln_stats["execution_time"].append(execution_time)
+            soln_stats["constr_violation"].append(constr_violation)
+            soln_stats["optimality"].append(optimality)
 
-                fun_hist = np.full(cfg["optim"]["options"]["maxiter"], fun)
-                fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
-                soln_stats["fun_hist"].append(fun_hist)
+            fun_hist = np.full(cfg["optim"]["options"]["maxiter"], fun)
+            fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
+            soln_stats["fun_hist"].append(fun_hist)
 
-                anim.annotation = (
-                    f"nit: {nit} f(x): {fun:.4}\n $\\Delta$ f(x):"
-                    f" {(fun - fun_hist[0]):4g}\nOptimality:"
-                    f" {optimality:.4}\nviolation: {constr_violation:.4}"
-                )
-                plt_x, plt_y, *_ = np.dsplit(
-                    np.moveaxis(np.reshape(x[0:i, :], (i, -1, 3))[..., 0:2], 1, 0), 2
-                )
+            logging.info(
+                "nit: %d f(x): %.4g from %.4g, optim.: %.4g, viol.: %.4g",
+                nit,
+                fun,
+                fun_hist[0],
+                optimality,
+                constr_violation,
+            )
 
-                anim.set_data(plt_x, plt_y)
+            rr.set_time("/time", duration=time[i])
+            leader_position = np.append(x[i, 0:2], 0.0)
+            leader_yaw = x[i, 2]
+            leader.set_pose(leader_position, PureYaw(angle=leader_yaw))
+            leader_trace.add_position(leader_position)
+            follower_position = np.append(x[i, 3:5], 0.0)
+            follower_yaw = x[i, 5]
+            follower.set_pose(follower_position, PureYaw(angle=follower_yaw))
+            follower_trace.add_position(follower_position)
 
-                plt.pause(1e-3)
-            success = True
     finally:  # Save the data at all costs
-        anim.anime.save(cfg["session"].get("video_name", "optimization.mp4"))
         soln_stats = {k: np.asarray(v) for k, v in soln_stats.items()}
         save_name = str(cfg["session"].get("save_name", "optimization_results.npz"))
         if not success:
             save_name = save_name.replace(".npz", ".failed.npz")
-        np.savez(save_name, states=x, inputs=u, time=time, **soln_stats)
-
-    figs = {}
-    figs[0], ax = plt.subplots()
-    ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-
-    plt_data = np.reshape(x, (-1, n_robots, 3))
-    for idx in range(n_robots):  # Vary vehicles
-        ax.plot(plt_data[:, idx, 0], plt_data[:, idx, 1], f"C{idx}")
-
-    plt.show()
+        np.savez(
+            save_name, states=x, inputs=u, time=time, allow_pickle=True, **soln_stats
+        )
 
 
 if __name__ == "__main__":

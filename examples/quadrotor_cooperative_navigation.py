@@ -1,4 +1,6 @@
 """
+A simulation of two quadrotors performing cooperative navigation.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -20,24 +22,24 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-import sys
+import logging
+import pathlib
+import tomllib
 import warnings
 
+from generate_quadrotor_trajectory import generate_trajectory
 import jax
 import jax.experimental.compilation_cache.compilation_cache as cc
-import matplotlib.pyplot as plt
 import numpy as np
-import tomllib
+import rerun as rr
 import tqdm
-from generate_quadrotor_trajectory import generate_trajectory
 
 import example_lib.models.inter_quadrotor_pose as mdl
-from example_lib import math
+import example_lib.visualization.visualization as viz
 from observability_aware_control import (
     integrator,
     observability_aware_controller,
     observability_cost,
-    utils,
 )
 
 cc.set_cache_dir("./.cache")
@@ -54,12 +56,13 @@ N_ROBOTS = 2
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
+SCRIPT_PATH = pathlib.Path(__file__)
+CONFIG_DIR = SCRIPT_PATH.parent.parent / "config"
 
-def main():
-    with open("./config/quadrotor_control_experiment.toml", "rb") as fp:
+
+def _main():
+    with (CONFIG_DIR / "quadrotor_control_experiment.toml").open("rb") as fp:
         cfg = tomllib.load(fp)
-
-    n_robots = cfg["n_robots"]
 
     # -----------------------Generate initial trajectory------------------------
     dt, t_refs, x_leader, u_leader = generate_trajectory(cfg["leader"]["trajectory"])
@@ -72,15 +75,8 @@ def main():
     # pos_var = np.full(3, 1e-2)
     range_var = 1e-2
     att_var = np.full(4, 1e-2)
-    vel_var = np.full(3, 1e-2)
     # var = np.concatenate([pos_var, att_var, range_var, vel_var])
-    var = np.concatenate(
-        [
-            np.array([range_var]),
-            att_var,
-            # vel_var,
-        ]
-    )
+    var = np.concatenate([np.array([range_var]), att_var])
     cost = observability_cost.ObservabilityCost(
         mdl.dynamics,
         mdl.observation,
@@ -112,16 +108,11 @@ def main():
 
     # -----------------Setup initial conditions and data saving-----------------
 
-    x[0, :] = np.concatenate(
-        [
-            np.array([0.0, -1.0, 1.0]),
-            np.array([0.0, 0.0, 0.0, 1.0]),
-            np.zeros(3),
-        ]
-    )
-    # np.concatenate(
-    # [x_leader[0, :], np.asarray(cfg["followers"]["init_state"]).ravel()]
-    # )
+    x[0, :] = np.concatenate([
+        np.array([0.0, -1.0, 1.0]),
+        np.array([0.0, 0.0, 0.0, 1.0]),
+        np.zeros(3),
+    ])
 
     input_steps = u_leader.shape[0]
     if sim_steps + window > input_steps:
@@ -142,6 +133,18 @@ def main():
         "constr_violation": [],
         "optimality": [],
     }
+    rr.init("quadrotor_control_experiment", spawn=True)
+    logging.getLogger().addHandler(rr.LoggingHandler("logs/handler"))
+    logging.getLogger().setLevel(logging.INFO)
+    rr.set_time("/time", duration=0.0)
+
+    leader_trace = viz.PositionTrace("/leader")
+    leader = viz.PoseReferenceFrame("/leader")
+    follower_trace = viz.PositionTrace("/follower")
+    follower = viz.PoseReferenceFrame("/follower")
+    leader.set_pose(x_leader[0, 0:3], rr.Quaternion(xyzw=x_leader[0, 3:7]))
+    x_abs = mdl.to_absolute_state(x_leader[0, :], x[0, :])
+    follower.set_pose(x_abs[0:3], rr.Quaternion(xyzw=x_abs[3:7]))
 
     # ----------------------------Run the Simulation----------------------------
     success = False
@@ -150,53 +153,57 @@ def main():
     )
 
     inputs_all = []
+    time = 0.0
     try:
-        fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-        anim = utils.animation.AnimatedRobotTrajectory(
-            fig, ax, dims=3, animation_kws={"interval": 50, "save_count": 100}
-        )
+        for i in tqdm.trange(1, sim_steps):
+            u_leader_0 = u_leader[i : i + window, :]
 
-        fig.show()
-        p_f = []
-        with plt.ion():
-            for i in tqdm.trange(1, sim_steps):
-                u_leader_0 = u_leader[i : i + window, :]
+            u0 = np.hstack([u_leader_0, np.tile(u_eqm, (window, N_ROBOTS - 1))])
+            soln = min_problem.minimize(
+                x[i - 1, :], u0, cfg["stlog"]["dt"], (4, 5, 6, 7)
+            )
+            soln_u = np.concatenate([u_leader[i, :], soln.x[0, 4:]])
+            inputs_all.append(soln.x)
+            u[i, :] = soln_u
+            x[i, :], dx[i, :] = sim(x[i - 1, :], soln_u)
+            time += dt
+            x[i, 3:7] /= np.linalg.norm(x[i, 3:7])
+            fun = soln.fun
+            status = soln.get("status", -1)
+            nit = soln.get("nit", np.nan)
+            execution_time = soln.get("execution_time", np.nan)
+            constr_violation = float(soln.get("constr_violation", np.nan))
+            optimality = soln.get("optimality", np.nan)
 
-                u0 = np.hstack([u_leader_0, np.tile(u_eqm, (window, N_ROBOTS - 1))])
-                soln = min_problem.minimize(
-                    x[i - 1, :], u0, cfg["stlog"]["dt"], (4, 5, 6, 7)
-                )
-                soln_u = np.concatenate([u_leader[i, :], soln.x[0, 4:]])
-                inputs_all.append(soln.x)
-                u[i, :] = soln_u
-                x[i, :], dx[i, :] = sim(x[i - 1, :], soln_u)
-                x[i, 3:7] /= np.linalg.norm(x[i, 3:7])
-                fun = soln.fun
-                status = soln.get("status", -1)
-                nit = soln.get("nit", np.nan)
-                execution_time = soln.get("execution_time", np.nan)
-                constr_violation = float(soln.get("constr_violation", np.nan))
-                optimality = soln.get("optimality", np.nan)
+            soln_stats["status"].append(status)
+            soln_stats["nit"].append(nit)
+            soln_stats["execution_time"].append(execution_time)
+            soln_stats["constr_violation"].append(constr_violation)
+            soln_stats["optimality"].append(optimality)
 
-                soln_stats["status"].append(status)
-                soln_stats["nit"].append(nit)
-                soln_stats["execution_time"].append(execution_time)
-                soln_stats["constr_violation"].append(constr_violation)
-                soln_stats["optimality"].append(optimality)
+            fun_hist = np.full(cfg["optim"]["options"]["maxiter"], fun)
+            fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
+            soln_stats["fun_hist"].append(fun_hist)
+            logging.info(
+                "nit: %d f(x): %.4g from %.4g, optim.: %.4g, viol.: %.4g",
+                nit,
+                fun,
+                fun_hist[0],
+                optimality,
+                constr_violation,
+            )
 
-                fun_hist = np.full(cfg["optim"]["options"]["maxiter"], fun)
-                fun_hist[0 : len(soln.fun_hist)] = np.asarray(soln.fun_hist)
-                soln_stats["fun_hist"].append(fun_hist)
+            x_abs = mdl.to_absolute_state(x_leader[i, :], x[i, :])
 
-                x_abs = mdl.to_absolute_state(x_leader[i, :], x[i, :])
+            rr.set_time("/time", duration=time)
+            leader_position = x_leader[i, 0:3]
+            leader_trace.add_position(leader_position)
+            leader.set_pose(leader_position, rr.Quaternion(xyzw=x_leader[i, 3:7]))
+            follower_position = x_abs[10:13]
+            follower_trace.add_position(follower_position)
+            follower.set_pose(follower_position, rr.Quaternion(xyzw=x_abs[13:17]))
 
-                p_f.append(x_abs[10:13])
-                plt_p = np.stack([x_leader[:i, 0:3], np.array(p_f)])
-                anim.set_data(plt_p[..., 0], plt_p[..., 1], plt_p[..., 2])
-                fig.canvas.draw_idle()
-                fig.canvas.flush_events()
-            success = True
-    finally:  # Save the data at all costs
+    finally:
         soln_stats = {k: np.asarray(v) for k, v in soln_stats.items()}
         save_name = str(
             cfg["session"].get("save_name", "optimization_results_extra_large.npz")
@@ -210,10 +217,10 @@ def main():
             inputs_all=np.array(inputs_all),
             derivatives=dx,
             time=time,
+            allow_pickle=True,
             **soln_stats,
         )
-    plt.show()
 
 
 if __name__ == "__main__":
-    main()
+    _main()

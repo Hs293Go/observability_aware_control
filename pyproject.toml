@@ -7,13 +7,14 @@ name = "observability_aware_control"
 version = "0.0.1"
 description = "Observability (Gramian)-based control and path planning"
 license = { text = "MIT" }
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
-    "equinox>=0.10.4",
-    "jax[cuda12]",
-    "matplotlib>=3.7.5",
-    "minsnap-trajectories>=0.1.2",
-    "tqdm",
+  "equinox>=0.10.4",
+  "jax[cuda12]",
+  "matplotlib>=3.10.6",
+  "minsnap-trajectories>=0.1.2",
+  "rerun-sdk>=0.22.1",
+  "tqdm",
 ]
 optional-dependencies = { "tests" = ["pytest", "casadi"] }
 
@@ -23,3 +24,114 @@ pythonpath = ["src"]
 
 [tool.isort]
 profile = "black"
+
+[tool.pyright]
+exclude = [".venv"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+
+[tool.ruff]
+target-version = "py312"
+preview = true
+fix = true
+unsafe-fixes = true
+extend-exclude = [".venv", "venv", "build", "dist", "migrations"]
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+
+[tool.ruff.lint]
+# Strong, general-purpose selection covering Flake8 + Pylint + useful plugins.
+# (E,F,W) pycodestyle/pyflakes, (B) bugbear, (I) isort, (N) pep8-naming,
+# (D) pydocstyle, (UP) pyupgrade, (S) bandit-like security, (SIM) simplify,
+# (C4) comprehensions, (PTH) use-pathlib, (PIE) pie, (PERF) performance,
+# (ISC) implicit-str-concat, (ICN) import-conventions,
+# (ARG) unused-arg (better messages),
+# (YTT) py3.8+ features, (SLF) private-member access,
+# (TRY) try/except best practices, (EXE) executable bits,
+# (PL) pylint, (RUF) ruff-specific.
+select = [
+  "E",
+  "F",
+  "W",
+  "B",
+  "I",
+  "N",
+  "D",
+  "UP",
+  "S",
+  "SIM",
+  "C4",
+  "PTH",
+  "PIE",
+  "PERF",
+  "ISC",
+  "ICN",
+  "ARG",
+  "YTT",
+  "SLF",
+  "TRY",
+  "EXE",
+  "PL",
+  "RUF",
+]
+
+ignore = [
+  "COM",
+  "E111",
+  "E114",
+  "E117",
+  "W191",
+  "D203",   # one-blank-line-before-class (conflicts with D211)
+  "D213",   # multi-line-summary-second-line (conflicts with Google style)
+  "D401",   # imperative mood (too noisy in mixed codebases)
+  "ANN",    # Annotations optional
+  "C90",    # Do not analyze complexity
+  "T20",    # Allow print statements (remove at 1.0)
+  "ERA",    # Allow commented-out code (remove at 1.0)
+  "TRY003", # Allow exceptions with rich string messages (remove at 1.0)
+  # Ignore too many 'X' lints
+  "PLR2004",
+  "PLR0904",
+  "PLR0911",
+  "PLR0912",
+  "PLR0913",
+  "PLR0914",
+  "PLR0915",
+  "PLR0916",
+  "PLR0917",
+]
+
+# Make these auto-fixable (everything else remains opt-in).
+fixable = ["ALL"]
+unfixable = [
+  "S",  # don’t auto-fix security issues; review manually
+  "PL", # many pylint fixes are stylistic; keep explicit
+]
+
+per-file-ignores = { "tests/**" = [
+  "D",
+  "ANN",
+  "S101",
+  "T20",
+  "SLF001",
+], "**/__init__.py" = [
+  "F401",
+  "F403",
+  "D104",
+] }
+
+[tool.ruff.lint.isort]
+known-first-party = ["rltoc"]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"

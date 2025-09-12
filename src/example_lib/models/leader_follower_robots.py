@@ -45,9 +45,8 @@ def dynamics(x, u, p=None):
 
 
 @functools.partial(jax.jit, static_argnames=["kind"])
-def observation(x, u, kind=ObservationKind.RANGE):
+def observation(x, _, kind=ObservationKind.RANGE):
     x = jnp.reshape(x, (-1, NUM_STATES))
-    u = jnp.reshape(u, (-1, NUM_INPUTS))
     leader_pos = x[0, 0:2]
     hdg = x[:, 2]
 
