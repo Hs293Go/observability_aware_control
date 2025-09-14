@@ -1,4 +1,6 @@
 """
+Integrator for continuous-time dynamical systems.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -23,7 +25,6 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import enum
 import functools
-from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -33,12 +34,17 @@ from .typing import DynamicsFunction, OutputFunction
 
 
 class Methods(enum.Enum):
+    """An enumerator of integration methods."""
+
     EULER = 0
     RK4 = 1
 
 
 class Integrator:
-    """Our Integrator solves an ODE representing an continuous-time dynamical
+    """
+    An ODE integrator for continuous-time dynamical systems.
+
+    Our Integrator solves an ODE representing an continuous-time dynamical
     system by integration. Our ODEs must be autonomous and implicitly depend on
     time through time-dependent control inputs. Such control inputs must be
     discretized a-priori and be piecewise constant, aka they are specified as a
@@ -50,10 +56,10 @@ class Integrator:
         self,
         dynamics: DynamicsFunction,
         method: Methods = Methods.RK4,
-        output: Optional[OutputFunction] = None,
-        stepsize: ArrayLike = jnp.array(1),
+        output: OutputFunction | None = None,
+        stepsize: ArrayLike = 1.0,
     ):
-        """Initializes the Integrator object
+        """Initializes the Integrator object.
 
         Parameters
         ----------
@@ -77,7 +83,6 @@ class Integrator:
         ValueError
             `stepsize` is not positive
         """
-
         self._dynamics = dynamics
         if method not in Methods:
             raise NotImplementedError(f"{method} is not a valid integration method")
@@ -89,6 +94,7 @@ class Integrator:
 
     @property
     def stepsize(self):
+        """The integration stepsize(s)."""
         return self._stepsize
 
     @stepsize.setter
@@ -96,8 +102,7 @@ class Integrator:
         self._stepsize = jnp.asarray(value)
 
     def __call__(self, x_op: ArrayLike, u: ArrayLike):
-        """Invokes the integrator at some initial state, with a sequence of
-        control inputs
+        """Integrates the ODE.
 
         Parameters
         ----------

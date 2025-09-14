@@ -1,5 +1,5 @@
 """
-Copyright © 2025 Hs293Go
+Copyright © 2025 Hs293Go.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -20,7 +20,6 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-from typing import Optional
 
 import equinox as eqx
 import jax
@@ -52,15 +51,12 @@ def dynamics(x: jax.Array, u: jax.Array):
 
 
 @eqx.filter_jit
-def observation(x: jax.Array, _: Optional[jax.Array] = None, *, use_sqnorm=True):
+def observation(x: jax.Array, _: jax.Array | None = None, *, use_sqnorm=True):
     r_lf = x[0:3]
     q_fl = x[3:7]
 
     r_lf_sqnorm = jnp.dot(r_lf, r_lf)
-    if use_sqnorm:
-        range_meas = r_lf_sqnorm
-    else:
-        range_meas = jnp.sqrt(r_lf_sqnorm)
+    range_meas = r_lf_sqnorm if use_sqnorm else jnp.sqrt(r_lf_sqnorm)
     return jnp.concatenate([jnp.array([range_meas]), q_fl])
 
 
@@ -71,10 +67,7 @@ def interrobot_distance_squared(x0, us, cost):
 
 @jax.jit
 def to_absolute_state(x_l, x_lf):
-    """
-    Convert relative state to absolute state.
-    """
-
+    """Convert relative state to absolute state."""
     p_l = x_l[:3]
     q_l = x_l[3:7]
     v_l = x_l[7:10]
@@ -91,10 +84,7 @@ def to_absolute_state(x_l, x_lf):
 
 @jax.jit
 def from_absolute_state(x_l, x_f):
-    """
-    Convert absolute state to relative state.
-    """
-
+    """Convert absolute state to relative state."""
     p_l = x_l[:3]
     q_l = x_l[3:7]
     v_l = x_l[7:10]

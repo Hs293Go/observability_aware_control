@@ -1,4 +1,6 @@
 """
+The short time local observability gramian (STLOG) implementation.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -21,11 +23,10 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 
-from typing import Any, Optional
+from typing import Any
 
 import jax
 import jax.numpy as jnp
-import jax.numpy.linalg as jla
 from jax.scipy import special
 from jax.typing import ArrayLike
 
@@ -35,7 +36,10 @@ from .typing import DynamicsFunction, ObservationFunction
 
 class STLOG(log_interface.LocalObservabilityGramian):
     """
-    Our Short Time Local Observability Gramian is a novel approximation of the
+
+    The Short Time Local Observability Gramian.
+
+    It is a novel approximation of the
     Local Observability Gramian that represents the ability to uniquely
     determine the current system state from prospective observations along a
     trajectory a "short time" into the future
@@ -46,9 +50,9 @@ class STLOG(log_interface.LocalObservabilityGramian):
         dynamics: DynamicsFunction,
         observation: ObservationFunction,
         order: int = 1,
-        var: Optional[ArrayLike] = None,
+        var: ArrayLike | None = None,
     ):
-        """Initializes the STLOG Local Gramian approximation evaluator
+        """Initializes the STLOG Local Gramian approximation evaluator.
 
         Parameters
         ----------
@@ -84,13 +88,13 @@ class STLOG(log_interface.LocalObservabilityGramian):
 
     @property
     def order(self):
+        """The order of approximation of the STLOG."""
         return self._order
 
     def __call__(
         self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
-        """Evaluates the STLOG Local Gramian approximation at a given state and
-        control input
+        """Evaluates the STLOG at a given state and control input.
 
         Parameters
         ----------
@@ -109,9 +113,9 @@ class STLOG(log_interface.LocalObservabilityGramian):
             The Local Observability Gramian (symmetric matrix with size equal to
             number of observations) approximated by the STLOG scheme
         """
-        lie_derivative_gradients = jnp.stack(
-            [jnp.atleast_2d(it(x, u, *args)) for it in self._lie_derivative_gradients]
-        )
+        lie_derivative_gradients = jnp.stack([
+            jnp.atleast_2d(it(x, u, *args)) for it in self._lie_derivative_gradients
+        ])
 
         factor = jnp.asarray(dt) ** self._k / self._den
 

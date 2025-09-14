@@ -1,5 +1,5 @@
 """
-Copyright © 2024 H S Helson Go and Ching Lok Chong
+Copyright © 2024 H S Helson Go and Ching Lok Chong.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),

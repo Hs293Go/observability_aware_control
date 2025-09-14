@@ -1,4 +1,6 @@
 """
+Typing definitions for the observability-aware control package.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -20,8 +22,8 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
+from collections.abc import Callable, Sequence
 from types import EllipsisType
-from typing import Any, Callable, Optional, Sequence, Union
 
 import jax
 from jax.typing import ArrayLike
@@ -30,5 +32,5 @@ DynamicsFunction = Callable[[jax.Array, jax.Array], jax.Array]
 ObservationFunction = Callable[[jax.Array, jax.Array], jax.Array]
 OutputFunction = Callable[[ArrayLike], jax.Array]
 
-type IndexExpression = Union[Sequence[int], slice, EllipsisType]
+type IndexExpression = Sequence[int] | slice | EllipsisType
 type ConstraintFunction = Callable

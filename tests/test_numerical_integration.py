@@ -81,7 +81,7 @@ stepsizes = jnp.arange(1, 6) * 0.01
 def test_integration(random_data, dt):
     sym_solve_ivp = make_symbolic_integrator(dt)
     solve_ivp = jax.jit(integrator.Integrator(bot.dynamics, stepsize=dt))
-    for x0, us in zip(*random_data):
+    for x0, us in zip(*random_data, strict=False):
         expected_xs = symbolic_solve_ivp(sym_solve_ivp, x0, us)
 
         result_xs, _ = solve_ivp(x0, us)  # pylint: disable=not-callable

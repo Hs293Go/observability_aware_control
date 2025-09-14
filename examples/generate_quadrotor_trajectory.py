@@ -1,5 +1,5 @@
 """
-Copyright © 2024 H S Helson Go and Ching Lok Chong
+Copyright © 2024 H S Helson Go and Ching Lok Chong.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,7 @@ from observability_aware_control import integrator
 def generate_leader_trajectory(timestamps, waypoints, t_sample, quadrotor_mass, ctl_dt):
 
     polys = ms.generate_trajectory(
-        [ms.Waypoint(float(t), p) for t, p in zip(timestamps, waypoints)],
+        [ms.Waypoint(float(t), p) for t, p in zip(timestamps, waypoints, strict=False)],
         5,
         idx_minimized_orders=[2, 3],
     )

@@ -1,5 +1,5 @@
 """
-Copyright © 2024 H S Helson Go and Ching Lok Chong
+Copyright © 2024 H S Helson Go and Ching Lok Chong.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -22,12 +22,9 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
 import functools
-import math
 
 import jax
 import jax.numpy as jnp
-
-from example_lib.math import rotation
 
 from . import simple_robot
 from .simple_robot import ObservationKind

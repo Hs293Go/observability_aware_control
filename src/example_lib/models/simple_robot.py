@@ -1,5 +1,5 @@
 """
-Copyright © 2024 H S Helson Go and Ching Lok Chong
+Copyright © 2024 H S Helson Go and Ching Lok Chong.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,6 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import enum
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jla

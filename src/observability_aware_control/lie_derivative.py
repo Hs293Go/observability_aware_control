@@ -1,4 +1,6 @@
 """
+Lie Derivative Module.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -32,6 +34,7 @@ def _lfh_impl(fun, vector_field, x, u, *args, **kwargs):
 
 
 def lie_derivative(fun, vector_field, order):
+    """Compute the Lie Derivative of a function along a vector field."""
     # Zeroth-order Lie Derivative
     lfh = fun
 

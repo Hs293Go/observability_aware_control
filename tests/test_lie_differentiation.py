@@ -45,7 +45,7 @@ def make_symbolic_lie_derivatives(order, kind):
 
     lfh = sym_bot.observation(sym["x"], sym["u"], sym["lm"], kind=kind)
     expected_lie_derivatives = []
-    for o in range(0, order + 1):
+    for o in range(order + 1):
         expected_lie_derivatives.append(
             cs.Function(f"lie_derivative_{o}", sym.values(), [lfh])
         )
@@ -62,7 +62,7 @@ def make_symbolic_lie_derivative_gradients(order, kind):
 
     lfh = sym_bot.observation(sym["x"], sym["u"], sym["lm"], kind=kind)
     expected_lie_derivative_gradients = []
-    for o in range(0, order + 1):
+    for o in range(order + 1):
         dlfh = cs.jacobian(lfh, sym["x"])
         expected_lie_derivative_gradients.append(
             cs.Function(f"lie_derivative_gradient_{o}", sym.values(), [dlfh])
@@ -94,7 +94,7 @@ def _():
 test_params = list(
     itertools.product(
         range(5),  # approximation orders
-        zip(bot.ObservationKind, sym_bot.ObservationKind),
+        zip(bot.ObservationKind, sym_bot.ObservationKind, strict=False),
     )
 )
 
@@ -113,8 +113,8 @@ def test_lie_derivative(random_data, order, kinds):
 
     assert len(result_lie_derivatives) == len(expected_lie_derivatives) == order + 1
 
-    for result, expected in zip(result_lie_derivatives, expected_lie_derivatives):
-        for x, u, lm in zip(*random_data):
+    for result, expected in zip(result_lie_derivatives, expected_lie_derivatives, strict=False):
+        for x, u, lm in zip(*random_data, strict=False):
             result_value = result(x, u, lm)
             expected_value = jnp.array(expected(x, u, lm)).squeeze()
             assert result_value == pytest.approx(expected_value)
@@ -143,9 +143,9 @@ def test_lie_derivative_gradients(random_data, order, kinds):
     )
 
     for result, expected in zip(
-        result_lie_derivative_gradients, expected_lie_derivative_gradients
+        result_lie_derivative_gradients, expected_lie_derivative_gradients, strict=False
     ):
-        for x, u, lm in zip(*random_data):
+        for x, u, lm in zip(*random_data, strict=False):
             expected_value = jnp.array(expected(x, u, lm)).squeeze()
             result_value = result(x, u, lm)
             assert result_value == pytest.approx(expected_value)

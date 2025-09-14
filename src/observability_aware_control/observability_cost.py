@@ -1,4 +1,6 @@
 """
+Observability-aware cost function for optimal control.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -34,26 +36,31 @@ from .typing import DynamicsFunction, IndexExpression, ObservationFunction
 
 
 class ObservabilityCostValue(NamedTuple):
+    """A named tuple representing the return value of the observability cost."""
+
     objective: jax.Array
-    gramians: Optional[ArrayLike] = None
-    states: Optional[ArrayLike] = None
-    inputs: Optional[ArrayLike] = None
+    gramians: ArrayLike | None = None
+    states: ArrayLike | None = None
+    inputs: ArrayLike | None = None
 
 
 GramianMetric = Callable[[ArrayLike], jax.Array]
 
 
-def default_gramian_metric(gramians: ArrayLike):
+def _default_gramian_metric(gramians: ArrayLike):
     sigmas = jla.norm(gramians, axis=(1, 2), ord=-2)
 
-    return 1.0 / (sigmas.sum() + 1e-3)
+    return 1e-3 / (sigmas.sum() + 1e-3)
 
 
 class ObservabilityCost:
-    """Our observability cost function evaluates observability --- a metric of
-    the local observability gramian, suitably approximated --- at each point
-    along a model-prediction trajectory, then sums these observability metrics
-    up to make for a scalar objective value.
+    """
+    An observability-aware cost function.
+
+    This cost function evaluates observability --- a metric of the local
+    observability gramian, suitably approximated --- at each point along a
+    model-prediction trajectory, then sums these observability metrics up to
+    make for a scalar objective value.
     """
 
     def __init__(
@@ -64,11 +71,11 @@ class ObservabilityCost:
         *,
         gramian: log_interface.LocalObservabilityGramianType = stlog.STLOG,
         integration_method: integrator.Methods = integrator.Methods.RK4,
-        gramian_kw: Optional[Mapping] = None,
-        gramian_metric: GramianMetric = default_gramian_metric,
+        gramian_kw: Mapping | None = None,
+        gramian_metric: GramianMetric = _default_gramian_metric,
         observed_indices: IndexExpression = (),
     ):
-        """Initializes the observability cost function object
+        """Initializes the observability cost function object.
 
         Parameters
         ----------
@@ -98,7 +105,6 @@ class ObservabilityCost:
             An expression that indexes a subset of the system state whose
             observability is evaluated, by default ()
         """
-
         self._solve_ode = integrator.Integrator(
             dynamics, integration_method, stepsize=integrator_dt
         )
@@ -122,13 +128,16 @@ class ObservabilityCost:
             self._stlog_slice = ...
 
     def eval_integrator(self, x0, us):
+        """Evaluates the integrator to produce a state trajectory."""
         return self._solve_ode(x0, us)
 
     def eval_gramian(
         self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
-        """Invokes the underlying STLOG approximator, subject to the slicing
-        scheme specified by 'observed_indices' in the initializer
+        """Invokes the underlying STLOG approximator.
+
+        The slicing scheme specified by 'observed_indices' in the initializer slices
+        the Gramian appropriately before returning
 
         Parameters
         ----------
@@ -158,9 +167,11 @@ class ObservabilityCost:
         return_trajectory: bool = False,
         return_gramians: bool = False,
     ) -> ObservabilityCostValue:
-        """Evaluates observability cost given an initial state and a sequence of
-        control inputs, evaluating a metric of the observability gramian at each
-        point of the resultant state trajectory and summing up the results
+        """Evaluates the observability cost.
+
+        Given an initial state and a sequence of control inputs, this function
+        evaluating a metric of the observability gramian at each point of the
+        resultant state trajectory and summing up the results
 
         Parameters
         ----------
@@ -189,7 +200,6 @@ class ObservabilityCost:
             where gramians, states, and inputs may be None if return_{gramians,
             trajectory} are not toggled on
         """
-
         us = jnp.asarray(us)
         xs, _ = self._solve_ode(x0, us)
 

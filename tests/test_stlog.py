@@ -27,9 +27,9 @@ import casadi as cs
 import jax
 import jax.numpy as jnp
 import jax.numpy.linalg as jla
+from jax.scipy import special
 import pytest
 import test_lib.models.symbolic_simple_robot as sym_bot
-from jax.scipy import special
 
 import example_lib.models.simple_robot as bot
 from observability_aware_control import elog, stlog
@@ -49,7 +49,7 @@ def make_symbolic_stlog(order, kind):
 
     lfh = sym_bot.observation(sym["x"], sym["u"], sym["lm"], kind=kind)
     lie_derivative_gradients = []
-    for _ in range(0, order + 1):
+    for _ in range(order + 1):
         dlfh = cs.jacobian(lfh, sym["x"])
         lie_derivative_gradients.append(dlfh)
         lfh = cs.jtimes(lfh, sym["x"], sym_bot.dynamics(sym["x"], sym["u"]))
@@ -90,7 +90,7 @@ def _():
 test_params = list(
     itertools.product(
         jnp.arange(1, 6) * 0.1,  # step sizes
-        zip(bot.ObservationKind, sym_bot.ObservationKind),
+        zip(bot.ObservationKind, sym_bot.ObservationKind, strict=False),
     )
 )
 
@@ -104,7 +104,7 @@ def test_stlog(random_data, stepsize, kinds):
 
     gramian = jax.jit(stlog.STLOG(bot.dynamics, observation_fcn, ORDER))
 
-    for x0, us, lm in zip(*random_data):
+    for x0, us, lm in zip(*random_data, strict=False):
         result = gramian(x0, us, stepsize, lm)  # pylint: disable=not-callable
         expected = jnp.asarray(sym_gramian(x0, us, stepsize, lm))
         assert result == pytest.approx(expected)
@@ -127,7 +127,7 @@ def test_stlog_vs_elog(random_data, stepsize, kind):
     stlog_gramian = jax.jit(stlog.STLOG(bot.dynamics, observation_fcn, ORDER))
     elog_gramian = jax.jit(elog.ELOG(bot.dynamics, observation_fcn))
 
-    for x0, u, lm in zip(*random_data):
+    for x0, u, lm in zip(*random_data, strict=False):
         # We need to space out the landmarks from the vehicle position as
         # tests will fail due to weird gramian values in blatantly unobservable
         # configurations, i.e. landmark very close to vehicle position

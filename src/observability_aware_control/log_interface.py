@@ -1,4 +1,6 @@
 """
+Local Observability Gramian Interface.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -30,16 +32,16 @@ from .typing import DynamicsFunction, ObservationFunction
 
 
 class LocalObservabilityGramian(abc.ABC):
-    """The interface for a Local Observability Gramian approximator. Essentially
-    encodes that the local observability Gramian depends on the definition for
-    both system dynamics and observation.
-    Once initialized, LOG approximators can be called like any function to
-    evaluate the LOG
+    """The interface for a Local Observability Gramian approximator.
+
+    Essentially encodes that the local observability Gramian depends on the
+    definition for both system dynamics and observation. Once initialized, LOG
+    approximators can be called like any function to evaluate the LOG
     """
 
     @abc.abstractmethod
     def __init__(self, dynamics: DynamicsFunction, observation: ObservationFunction):
-        """Initializes some Local Gramian approximation evaluator
+        """Initializes some Local Gramian approximation evaluator.
 
         Parameters
         ----------
@@ -54,7 +56,7 @@ class LocalObservabilityGramian(abc.ABC):
 
     @abc.abstractmethod
     def __call__(self, x: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any) -> Array:
-        """Evaluates the Local Gramian approximation
+        """Evaluates the Local Gramian approximation.
 
         Parameters
         ----------
@@ -65,6 +67,7 @@ class LocalObservabilityGramian(abc.ABC):
         dt : ArrayLike
             Control timesteps or observation horizon (depending on approximation
             scheme definition)
+
         Returns
         -------
         jax.Array

@@ -1,5 +1,4 @@
-import functools
-from typing import Callable, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -7,7 +6,7 @@ from jax.typing import ArrayLike
 
 
 def complementary_indices(size: int, ids: ArrayLike) -> jax.Array:
-    """Finds the complement of given indices in a index sequence
+    """Finds the complement of given indices in a index sequence.
 
     Parameters
     ----------
@@ -27,9 +26,9 @@ def complementary_indices(size: int, ids: ArrayLike) -> jax.Array:
 
 @jax.jit
 def separate_array(
-    mat: jax.Array, idx: ArrayLike, idy: Optional[ArrayLike] = None
-) -> Tuple[ArrayLike, ArrayLike]:
-    """Extracts the idx and idy-th components (along the last axis) of the input matrix
+    mat: jax.Array, idx: ArrayLike, idy: ArrayLike | None = None
+) -> tuple[ArrayLike, ArrayLike]:
+    """Extracts the idx and idy-th components (along the last axis) of the input matrix.
 
     Parameters
     ----------
@@ -46,7 +45,6 @@ def separate_array(
     Tuple[ArrayLike, ArrayLike]
         The idx and idy-th components of the input matrix respectively
     """
-
     if idy is None:
         idy = complementary_indices(mat.shape[-1], idx)
     return mat[..., idx], mat[..., idy]
@@ -60,7 +58,7 @@ def combine_array(
     idy: ArrayLike,
 ) -> jax.Array:
     """Builds an array by combining idx and idy-th components (along the last axis) with
-    values m_1 and m_2. Inverse of separate_array
+    values m_1 and m_2. Inverse of separate_array.
 
     Parameters
     ----------
@@ -89,13 +87,13 @@ def combine_array(
 
 def separate_array_argument(
     fun: Callable,
-    shape: Union[int, Sequence[int]],
+    shape: int | Sequence[int],
     idx: ArrayLike,
-    idy: Optional[ArrayLike] = None,
+    idy: ArrayLike | None = None,
 ) -> Callable:
     """Wraps a function taking an array as the first argument to give a function taking
     the 'idx' and 'idy' components of said array along the last axis as the first and
-    second arguments respectively
+    second arguments respectively.
 
     Parameters
     ----------

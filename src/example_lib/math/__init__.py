@@ -1,4 +1,4 @@
-"""Miscellaneous math functions to support the examples"""
+"""Miscellaneous math functions to support the examples."""
 
 from .rotation import (
     angle_rotate_point,

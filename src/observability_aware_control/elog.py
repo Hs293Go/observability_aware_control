@@ -1,5 +1,5 @@
 """
-Copyright © 2024 H S Helson Go and Ching Lok Chong
+Copyright © 2024 H S Helson Go and Ching Lok Chong.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,7 @@ from .typing import DynamicsFunction, IndexExpression, ObservationFunction
 
 class ELOG(log_interface.LocalObservabilityGramian):
     """Krener and IDE's Empirical Local Observability Gramian (ELOG) relies on
-    numerically differentiating a path of observations. This is accomplished by
+    numerically differentiating a path of observations. This is accomplished by.
 
     * perturbing each component of the initial condition
     * For each perturbed initial condition, compute the resultant system
@@ -50,7 +50,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
         perturb_indices: IndexExpression = ...,
         method: integrator.Methods = integrator.Methods.RK4,
     ):
-        """Initializes the ELOG Local Gramian approximation evaluator
+        """Initializes the ELOG Local Gramian approximation evaluator.
 
         Parameters
         ----------
@@ -84,7 +84,7 @@ class ELOG(log_interface.LocalObservabilityGramian):
         self, x0: ArrayLike, u: ArrayLike, dt: ArrayLike, *args: Any
     ) -> jax.Array:
         """Evaluates the ELOG Local Gramian approximate starting from a given
-        initial condition through a trajectory of control inputs
+        initial condition through a trajectory of control inputs.
 
         Parameters
         ----------
@@ -106,7 +106,6 @@ class ELOG(log_interface.LocalObservabilityGramian):
             The Local Observability Gramian (symmetric matrix with size equal to
             number of observations) approximated by the ELOG scheme
         """
-
         x0 = jnp.asarray(x0)
         u = jnp.asarray(u)
         dt /= len(u)

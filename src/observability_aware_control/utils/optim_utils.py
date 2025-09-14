@@ -2,7 +2,7 @@ from collections.abc import Callable
 import dataclasses
 import pathlib
 import time
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np

@@ -1,4 +1,6 @@
 """
+Observability Aware Controller.
+
 Copyright © 2024 H S Helson Go and Ching Lok Chong
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -22,10 +24,11 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import functools as fn
 import inspect
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import equinox as eqx
 import jax
+from jax.experimental import checkify
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 from scipy import optimize
@@ -42,7 +45,10 @@ def _recombine_input(u, u_const, id_mut, id_const):
 
 
 class ObservabilityAwareController:
-    """This controller solves our Observability-Aware control problem, computing
+    """
+    An observability-aware optimal controller.
+
+    This controller solves our Observability-Aware control problem, computing
     a sequence of control inputs that minimize the sum of the minimum singular
     value of the Local Observability Gramian at each point along a predicted
     trajectory
@@ -53,12 +59,12 @@ class ObservabilityAwareController:
         cost: observability_cost.ObservabilityCost,
         lb: ArrayLike = -jnp.inf,
         ub: ArrayLike = jnp.inf,
-        method: Optional[utils.optim_utils.Method] = None,
-        optim_options: Optional[Dict[str, Any]] = None,
-        constraint: Optional[ConstraintFunction] = None,
-        constraint_bounds: Tuple[ArrayLike, ArrayLike] = (-jnp.inf, 0.0),
+        method: utils.optim_utils.Method | None = None,
+        optim_options: dict[str, Any] | None = None,
+        constraint: ConstraintFunction | None = None,
+        constraint_bounds: tuple[ArrayLike, ArrayLike] = (-jnp.inf, 0.0),
     ):
-        """Initializes the Observability Aware Controller
+        """Initializes the Observability Aware Controller.
 
         Parameters
         ----------
@@ -81,14 +87,13 @@ class ObservabilityAwareController:
         constraint_bounds : Tuple[ArrayLike, ArrayLike], optional
             Bounds for nonlinear constraints, by default (-jnp.inf, 0.0)
         """
+        self._cost_fcn = cost
 
-        self._cost = cost
-
-        self._gradient = jax.grad(lambda us, x, dt: self._cost(x, us, dt).objective)
+        self._grad_fcn = jax.grad(lambda us, x, dt: self._cost_fcn(x, us, dt).objective)
 
         self._problem = utils.optim_utils.MinimizeProblem(
-            self.objective,
-            jac=self.gradient,
+            self._objective,
+            jac=self._gradient,
             method=method,
             options=optim_options,
         )
@@ -97,48 +102,53 @@ class ObservabilityAwareController:
         self._ub = jnp.asarray(ub)
 
         if constraint is not None and constraint_bounds is not None:
-            self._constraint = constraint
+            self._constr_fcn = constraint
             self._constraint_lb, self._constraint_ub = jnp.broadcast_arrays(
                 *map(jnp.asarray, constraint_bounds)
             )
-            self._constraint_jacobian = jax.jacobian(
+            self._constraint_jac_fcn = jax.jacobian(
                 lambda us, x, *a, **kw: constraint(x, us, *a, **kw)
             )
         else:
-            self._constraint = None
+            self._constr_fcn = None
 
     @eqx.filter_jit
-    def objective(self, u, u_const, x, dt, minimized_indices, constant_indices):
+    def _objective(self, u, u_const, x, dt, minimized_indices, constant_indices):
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
-        return self._cost(x, u, dt).objective
+        return self._cost_fcn(x, u, dt).objective
 
     @eqx.filter_jit
-    def gradient(self, u, u_const, x, dt, minimized_indices, constant_indices):
+    def _gradient(self, u, u_const, x, dt, minimized_indices, constant_indices):
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
-        return self._gradient(u, x, dt)[..., minimized_indices].ravel()
+        return self._grad_fcn(u, x, dt)[..., minimized_indices].ravel()
 
     @eqx.filter_jit
-    def constraint(self, u, u_const, x, _, minimized_indices, constant_indices):
-        assert self._constraint is not None, (
-            "This problem is not configured to have constraints"
+    @checkify.checkify
+    def _constraint(self, u, u_const, x, _, minimized_indices, constant_indices):
+        checkify.check(
+            self._constr_fcn is None,
+            "This problem is not configured to have constraints",
         )
+        assert self._constr_fcn  # noqa
 
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
 
         # If the constraint model requires the cost model, then pass it in
-        if "cost" in inspect.signature(self._constraint).parameters:
-            return self._constraint(x, u, cost=self._cost)
-        return self._constraint(x, u)
+        if "cost" in inspect.signature(self._constr_fcn).parameters:
+            return self._constr_fcn(x, u, cost=self._cost_fcn)
+        return self._constr_fcn(x, u)
 
     @eqx.filter_jit
-    def constraint_jacobian(
+    @checkify.checkify
+    def _constraint_jacobian(
         self, u, u_const, x, _, minimized_indices, constant_indices
     ):
-        assert self._constraint is not None, (
-            "This problem is not configured to have constraints"
+        checkify.check(
+            self._constr_fcn is None,
+            "This problem is not configured to have constraints",
         )
         u = _recombine_input(u, u_const, minimized_indices, constant_indices)
-        jac = self._constraint_jacobian(u, x, cost=self._cost)
+        jac = self._constraint_jac_fcn(u, x, cost=self._cost_fcn)
         return jac[..., minimized_indices].reshape(jac.shape[0], -1)
 
     def minimize(
@@ -148,7 +158,7 @@ class ObservabilityAwareController:
         t: ArrayLike,
         minimized_indices: IndexExpression = (),
     ) -> optimize.OptimizeResult:
-        """Solves the Observability-Aware Control Problem
+        """Solves the Observability-Aware Control Problem.
 
         Parameters
         ----------
@@ -187,7 +197,7 @@ class ObservabilityAwareController:
         args = (u_const, x0, t, minimized_idx, constant_idx)
         self._problem.args = args
 
-        if self._constraint is not None:
+        if self._constr_fcn is not None:
             if self._constraint_lb.ndim <= 1:
                 self._constraint_lb = jnp.atleast_1d(self._constraint_lb)
 
@@ -198,9 +208,9 @@ class ObservabilityAwareController:
             else:
                 lb, ub = self._constraint_lb, self._constraint_ub
             self._problem.constraints = optimize.NonlinearConstraint(
-                lambda u: self.constraint(u, *args),
+                lambda u: self._constraint(u, *args),
                 *map(jnp.ravel, (lb, ub)),
-                jac=lambda u: self.constraint_jacobian(u, *args),  # type: ignore
+                jac=lambda u: self._constraint_jacobian(u, *args),  # type: ignore
             )
 
         rec = utils.optim_utils.OptimizationRecorder()

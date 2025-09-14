@@ -5,18 +5,18 @@ import tomllib
 
 import jax
 import jax.experimental.compilation_cache.compilation_cache as cc
-import matplotlib.pyplot as plt
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 import tqdm
 
+from example_lib.misc import simple_ekf
 from example_lib.models import leader_follower_robots
 import example_lib.visualization.visualization as viz
 from observability_aware_control import (
     integrator,
     observability_aware_controller,
     observability_cost,
-    utils,
 )
 
 cc.set_cache_dir("./.cache")
@@ -88,16 +88,41 @@ def main():
         "optimality": [],
     }
     rr.init("quadrotor_control_experiment", spawn=True)
-    logging.getLogger().addHandler(rr.LoggingHandler("logs/handler"))
+    logging.getLogger().addHandler(rr.LoggingHandler("/logs/handler"))
     logging.getLogger().setLevel(logging.INFO)
     rr.set_time("/time", duration=0.0)
 
-    leader_trace = viz.PositionTrace("/leader")
-    leader = viz.PoseReferenceFrame("/leader")
-    follower_trace = viz.PositionTrace("/follower")
-    follower = viz.PoseReferenceFrame("/follower")
+    leader_trace = viz.PositionTrace("/sim/leader")
+    leader = viz.PoseReferenceFrame("/sim/leader")
+    follower_trace = viz.PositionTrace("/sim/follower")
+    follower = viz.PoseReferenceFrame("/sim/follower")
     leader.set_pose(np.append(x[0, 0:2], 0.0), PureYaw(angle=x[0, 2]))
     follower.set_pose(np.append(x[0, 3:5], 0.0), PureYaw(angle=x[0, 5]))
+
+    for ax, c in zip(["x", "y", "theta"], np.eye(3), strict=True):
+        rr.log(
+            f"/graphs/estimation/{ax}/variance",
+            rr.SeriesLines(
+                names=f"3-sigma confidence bound on {ax}", colors=c, widths=2
+            ),
+        )
+
+    rr.send_blueprint(
+        rrb.Horizontal(
+            rrb.Spatial3DView(origin="/sim"),
+            rrb.Vertical(
+                rrb.TextLogView(origin="/logs"),
+                *(
+                    rrb.TimeSeriesView(
+                        origin=f"/graphs/estimation/{ax}",
+                        name=f"Estimation Performance in {ax}",
+                    )
+                    for ax in ["x", "y", "theta"]
+                ),
+                row_shares=[0.5, 1, 1, 1],
+            ),
+        )
+    )
 
     # ----------------------------Run the Simulation----------------------------
     success = False
@@ -107,14 +132,44 @@ def main():
         )
     )
 
+    input_var = np.tile(np.array([1e-2, 1e-2]), 2)
+    ekf = simple_ekf.SimpleEKF(
+        lambda x, u, dt: x + dt * leader_follower_robots.dynamics(x, u),
+        lambda x: leader_follower_robots.observation(x, 0),
+        in_cov=np.diag(input_var),
+        obs_cov=np.diag(var),
+    )
+    ekf_cov = np.eye(x.shape[1]) * 1e-3
+
+    rng = np.random.default_rng()
     try:
         for i in tqdm.trange(1, sim_steps):
             u_refs = np.array([u[i - 1, :]] * window)
+            x_op = x[i - 1, :]
+            x_op, ekf_cov = ekf.predict(x_op, ekf_cov, u[i - 1, :], dt)
+
+            feedback = leader_follower_robots.observation(
+                x_op, u[i - 1, :]
+            ) + rng.normal(0.0, np.sqrt(var), size=var.shape)
+
+            x_op, ekf_cov = ekf.update(x_op, ekf_cov, feedback)
+            three_sigmas = 3 * np.sqrt(np.diag(ekf_cov))
+            for j, ax in enumerate(["x", "y", "theta"]):
+                rr.log(
+                    f"/graphs/estimation/{ax}/variance", rr.Scalars(three_sigmas[3 + j])
+                )
+
+            if np.any(np.isnan(x_op)):
+                raise ValueError("EKF diverged")
             soln = min_problem.minimize(
-                x[i - 1, :], u_refs, cfg["stlog"]["dt"], minimized_indices=(2, 3)
+                x_op, u_refs, cfg["stlog"]["dt"], minimized_indices=(2, 3)
             )
             soln_u = soln.x[0, :]
+            soln_u = soln_u.at[3:6].add(
+                rng.normal(0.0, np.sqrt(input_var[3:6]))
+            )  # Input noise to follower
             u[i, :] = soln_u
+
             x[i, :], _ = sim(x[i - 1, :], soln_u)
 
             fun = soln.fun
