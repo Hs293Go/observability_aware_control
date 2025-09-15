@@ -38,29 +38,42 @@ pipx install uv
 
 ## Running the code
 
-Finally, you can begin to run our scripts using `uv run <script_name>`, e.g.
+Finally, you can begin to run our scripts using `uv run <script_name>`.
+
+To run our simple robot cooperative navigation example, run:
+
+```bash
+uv run examples/simple_robot_cooperative_navigation.py
+```
+
+To run our quadrotor cooperative navigation example, run:
 
 ```bash
 uv run examples/quadrotor_cooperative_navigation.py
 ```
 
-> [!NOTE] Unless you install this package, you need to put `src` on the
-> `PYTHONPATH` for the module `observability_aware_control` to be found. If you
-> have `direnv` installed, inspect our `.envrc` then run `direnv allow` to
-> automatically set the `PYTHONPATH` when you `cd` into this directory.
-> Alternatively, you are free to set the `PYTHONPATH` manually, e.g.
->
-> ```bash
-> export PYTHONPATH=$PWD/src:$PYTHONPATH
-> ```
+## Troubleshooting
 
-> [!WARNING] We use the `jax[cuda12]` variant of `jax`, which contains its own
-> set of CUDA libraries. This may conflict with other CUDA installations on your
-> system. Clear `LD_LIBRARY_PATH` to make system CUDA libraries invisible to
-> `jax`.
->
-> ```bash
-> unset LD_LIBRARY_PATH
-> ```
+Unless you install this package, you need to put `src` on the `PYTHONPATH` for
+the module `observability_aware_control` to be found. This can be done by
+running the following command at the project root:
 
-Alternatively, you can explicitly sync the dependencies using `uv sync` first.
+```bash
+export PYTHONPATH=$PWD/src:$PYTHONPATH
+```
+
+Furthermore,
+
+We use the `jax[cuda12]` variant of `jax`, which contains its own set of CUDA
+libraries. This may conflict with other CUDA installations on your system. Clear
+`LD_LIBRARY_PATH` to make system CUDA libraries invisible to `jax`.
+
+```bash
+unset LD_LIBRARY_PATH
+```
+
+> [!NOTE]
+>
+> If you installed `direnv` and enabled its `load_dotenv` option, inspect our
+> `.env` then run `direnv allow` to automatically set the `PYTHONPATH` and
+> `LD_LIBRARY_PATH` when you `cd` into this directory.
